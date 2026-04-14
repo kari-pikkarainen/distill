@@ -1,0 +1,40 @@
+# container-structure-test configuration for rhel9-runtime
+# Run with: devbox run test <image:tag> examples/rhel9-runtime/test.yaml
+
+schemaVersion: "2.0.0"
+
+metadataTest:
+  env:
+    - key: LANG
+      value: en_US.UTF-8
+    - key: LC_ALL
+      value: en_US.UTF-8
+  user: "10001:10001"
+
+fileExistenceTests:
+  - name: "ca-certificates present"
+    path: /etc/pki/tls/certs/ca-bundle.crt
+    shouldExist: true
+
+  - name: "no dnf binary"
+    path: /usr/bin/dnf
+    shouldExist: false
+
+  - name: "no yum binary"
+    path: /usr/bin/yum
+    shouldExist: false
+
+  - name: "appuser home directory exists"
+    path: /home/appuser
+    shouldExist: true
+
+commandTests:
+  - name: "bash is executable"
+    command: "/bin/bash"
+    args: ["--version"]
+    expectedOutput: ["GNU bash"]
+
+  - name: "no package manager available"
+    command: "/bin/bash"
+    args: ["-c", "command -v dnf || command -v yum || echo NONE"]
+    expectedOutput: ["NONE"]

@@ -1,0 +1,47 @@
+# Minimal RHEL9 runtime image — the base layer for all other RHEL9-derived images.
+#
+# Target: ≤30MB compressed
+#
+# Contains only what is required to run a dynamically linked executable:
+#   - glibc and libstdc++ for runtime linking
+#   - coreutils for basic shell utilities (used by entrypoint scripts)
+#   - ca-certificates for TLS verification
+#   - tzdata for timezone support
+#
+# The package manager (dnf/rpm) is removed after installation.
+# Images that extend this one should layer their runtime on top via
+# a multi-stage build or a separate Distill spec.
+
+name: rhel9-runtime
+description: Minimal RHEL9 base runtime with no package manager
+
+base:
+  image: registry.access.redhat.com/ubi9/ubi
+  releasever: "9"
+  packageManager: dnf
+
+packages:
+  - coreutils
+  - glibc
+  - libstdc++
+  - ca-certificates
+  - tzdata
+  - glibc-langpack-en
+
+accounts:
+  groups:
+    - name: appuser
+      gid: 10001
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+
+image:
+  cmd: ["/bin/bash"]
+  env:
+    LANG: en_US.UTF-8
+    LC_ALL: en_US.UTF-8
+
+immutable: true
