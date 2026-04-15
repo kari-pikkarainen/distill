@@ -58,7 +58,7 @@ func aptDockerfile(s *spec.ImageSpec) string {
 
 	// ── Builder stage ────────────────────────────────────────────────────────
 
-	b.WriteString(fmt.Sprintf("FROM %s AS builder\n", s.Base.Image))
+	fmt.Fprintf(&b, "FROM %s AS builder\n", s.Base.Image)
 
 	b.WriteString("\n# Install debootstrap if not present in the base image.\n")
 	b.WriteString("RUN apt-get update -qq \\\n")
@@ -66,10 +66,10 @@ func aptDockerfile(s *spec.ImageSpec) string {
 
 	b.WriteString("\n# Bootstrap a minimal rootfs.\n")
 	b.WriteString("# --variant=minbase installs only Essential:yes packages plus the explicit list.\n")
-	b.WriteString(fmt.Sprintf("RUN debootstrap --variant=minbase --include=%s %s /chroot\n",
+	fmt.Fprintf(&b, "RUN debootstrap --variant=minbase --include=%s %s /chroot\n",
 		strings.Join(s.Packages, ","),
 		s.Base.Releasever,
-	))
+	)
 
 	if s.Accounts != nil && (len(s.Accounts.Groups) > 0 || len(s.Accounts.Users) > 0) {
 		b.WriteString("\n# Create groups and users inside the chroot.\n")
@@ -79,7 +79,7 @@ func aptDockerfile(s *spec.ImageSpec) string {
 			if !first {
 				b.WriteString(" \\\n    && ")
 			}
-			b.WriteString(fmt.Sprintf("chroot /chroot groupadd --gid %d %s", g.GID, g.Name))
+			fmt.Fprintf(&b, "chroot /chroot groupadd --gid %d %s", g.GID, g.Name)
 			first = false
 		}
 		for _, u := range s.Accounts.Users {

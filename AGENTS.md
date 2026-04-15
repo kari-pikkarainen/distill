@@ -139,6 +139,53 @@ The linter configuration is in `.golangci.yml`. Do not disable linters inline
 5. Write unit tests for the script generator in
    `internal/builder/<name>_test.go`.
 
+## Pre-commit hooks (Lefthook)
+
+This project uses [Lefthook](https://github.com/evilmartians/lefthook) for local
+Git hooks. Hooks are installed automatically when you enter `devbox shell`. To
+install them manually:
+
+```bash
+lefthook install
+```
+
+The `pre-commit` hook runs two checks in order:
+
+1. **`goimports`** — formats staged `.go` files and re-stages the result automatically.
+   Covers both `gofmt` formatting and import block organisation.
+2. **`golangci-lint run ./...`** — lints all packages. Requires golangci-lint v2
+   (provided by `devbox shell`). If you have the system-installed v1 on PATH
+   the hook will fail with a config version error; use `devbox shell` to get v2.
+
+To skip hooks for a single commit (use sparingly):
+
+```bash
+LEFTHOOK=0 git commit -m "..."
+```
+
+The hook config lives in `lefthook.yml` at the repo root.
+
+---
+
+## CI / release workflow notes
+
+### SLSA generator version pinning
+
+The release workflow (`.github/workflows/release.yml`) pins
+`slsa-framework/slsa-github-generator` to a specific version tag:
+
+```yaml
+uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+```
+
+**This must stay pinned to a specific tag — never use a floating `@v2` alias.**
+Pinning is a SLSA security requirement: the build platform must be immutable and
+auditable. When upgrading, update the tag to the new release and verify the
+[slsa-github-generator release notes](https://github.com/slsa-framework/slsa-github-generator/releases)
+for any breaking changes to the `base64-subjects` input format.
+
+---
+
 ## What not to do
 
 - Do not add error handling for conditions that cannot happen in normal program

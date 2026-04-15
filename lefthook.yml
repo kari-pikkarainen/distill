@@ -1,0 +1,21 @@
+# lefthook.yml — Git hook configuration
+# Install hooks: lefthook install   (runs automatically on: devbox shell)
+# Skip hooks:    LEFTHOOK=0 git commit ...
+# Docs: https://github.com/evilmartians/lefthook
+
+pre-commit:
+  # Run sequentially: goimports fixes and re-stages first, then lint validates.
+  parallel: false
+  commands:
+    # 1. Auto-format staged Go files and re-stage the result.
+    #    Covers both gofmt formatting and import organisation.
+    goimports:
+      glob: "**/*.go"
+      run: goimports -l -w {staged_files}
+      stage_fixed: true
+
+    # 2. Lint all packages via devbox, which guarantees golangci-lint v2.
+    #    Direct invocation risks picking up the system golangci-lint v1.
+    #    To skip temporarily: LEFTHOOK=0 git commit -m "..."
+    lint:
+      run: devbox run lint
