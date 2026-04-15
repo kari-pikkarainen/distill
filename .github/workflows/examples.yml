@@ -30,13 +30,13 @@ jobs:
       matrix:
         example:
           - name: rhel9-runtime
-            spec: examples/rhel9-runtime/image.yaml
+            spec: examples/rhel9-runtime/image.distill.yaml
             test: examples/rhel9-runtime/test.yaml
-            tag: distill-example-rhel9-runtime:ci
+            tag: distill-example-rhel9-runtime:latest
           - name: debian-runtime
-            spec: examples/debian-runtime/image.yaml
+            spec: examples/debian-runtime/image.distill.yaml
             test: examples/debian-runtime/test.yaml
-            tag: distill-example-debian-runtime:ci
+            tag: distill-example-debian-runtime:latest
 
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +55,7 @@ jobs:
       - name: Build example image
         env:
           DISTILL_CONTAINER_CLI: docker
-        run: ./distill build --spec ${{ matrix.example.spec }} --tag ${{ matrix.example.tag }}
+        run: ./distill build --spec ${{ matrix.example.spec }}
 
       - name: Install container-structure-test
         if: matrix.example.test != ''
