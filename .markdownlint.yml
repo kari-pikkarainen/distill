@@ -11,3 +11,6 @@ MD033: false
 
 # MD041 - First line should be top level heading: disable for templates/fragments
 MD041: false
+
+# MD060 - Table column style: disable, project uses compact GFM-style separators (|---|---|)
+MD060: false
