@@ -139,6 +139,34 @@ The linter configuration is in `.golangci.yml`. Do not disable linters inline
 5. Write unit tests for the script generator in
    `internal/builder/<name>_test.go`.
 
+## Pre-commit hooks (Lefthook)
+
+This project uses [Lefthook](https://github.com/evilmartians/lefthook) for local
+Git hooks. Hooks are installed automatically when you enter `devbox shell`. To
+install them manually:
+
+```bash
+lefthook install
+```
+
+The `pre-commit` hook runs two checks in order:
+
+1. **`goimports`** — formats staged `.go` files and re-stages the result automatically.
+   Covers both `gofmt` formatting and import block organisation.
+2. **`golangci-lint run ./...`** — lints all packages. Requires golangci-lint v2
+   (provided by `devbox shell`). If you have the system-installed v1 on PATH
+   the hook will fail with a config version error; use `devbox shell` to get v2.
+
+To skip hooks for a single commit (use sparingly):
+
+```bash
+LEFTHOOK=0 git commit -m "..."
+```
+
+The hook config lives in `lefthook.yml` at the repo root.
+
+---
+
 ## CI / release workflow notes
 
 ### SLSA generator version pinning

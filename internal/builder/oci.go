@@ -17,16 +17,16 @@ func scratchStageInstructions(s *spec.ImageSpec) string {
 	b.WriteString("COPY --from=builder /chroot /\n")
 
 	for k, v := range s.Image.Env {
-		b.WriteString(fmt.Sprintf("ENV %s=%q\n", k, v))
+		fmt.Fprintf(&b, "ENV %s=%q\n", k, v)
 	}
 
 	if s.Image.Workdir != "" {
-		b.WriteString(fmt.Sprintf("WORKDIR %s\n", s.Image.Workdir))
+		fmt.Fprintf(&b, "WORKDIR %s\n", s.Image.Workdir)
 	}
 
 	if s.Accounts != nil && len(s.Accounts.Users) > 0 {
 		u := s.Accounts.Users[0]
-		b.WriteString(fmt.Sprintf("USER %d:%d\n", u.UID, u.GID))
+		fmt.Fprintf(&b, "USER %d:%d\n", u.UID, u.GID)
 	}
 
 	if len(s.Image.Cmd) > 0 {
@@ -34,10 +34,10 @@ func scratchStageInstructions(s *spec.ImageSpec) string {
 		for i, c := range s.Image.Cmd {
 			parts[i] = fmt.Sprintf("%q", c)
 		}
-		b.WriteString(fmt.Sprintf("CMD [%s]\n", strings.Join(parts, ", ")))
+		fmt.Fprintf(&b, "CMD [%s]\n", strings.Join(parts, ", "))
 	}
 
-	b.WriteString(fmt.Sprintf("LABEL org.opencontainers.image.title=%q\n", s.Name))
+	fmt.Fprintf(&b, "LABEL org.opencontainers.image.title=%q\n", s.Name)
 
 	return b.String()
 }

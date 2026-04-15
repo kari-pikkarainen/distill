@@ -15,7 +15,8 @@
     "jq@latest",
     "yq-go@latest",
     "gitversion@latest",
-    "goreleaser@latest"
+    "goreleaser@latest",
+    "lefthook@latest"
   ],
   "env": {
     "GOPATH": "$HOME/go",
@@ -24,6 +25,7 @@
   "shell": {
     "init_hook": [
       "go install golang.org/x/tools/cmd/goimports@latest",
+      "lefthook install",
       "echo 'distill dev environment ready'",
       "echo ''",
       "echo '  go build -o distill .   — build the CLI'",

@@ -60,7 +60,7 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 
 	// ── Builder stage ────────────────────────────────────────────────────────
 
-	b.WriteString(fmt.Sprintf("FROM %s AS builder\n", s.Base.Image))
+	fmt.Fprintf(&b, "FROM %s AS builder\n", s.Base.Image)
 
 	b.WriteString("\n# Initialize a fresh RPM database and seed the repo configuration.\n")
 	b.WriteString("RUN rpm --root /chroot --initdb \\\n")
@@ -70,15 +70,15 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 	b.WriteString("\n# Install packages into the chroot.\n")
 	b.WriteString("RUN dnf install -y -q \\\n")
 	b.WriteString("    --installroot /chroot \\\n")
-	b.WriteString(fmt.Sprintf("    --releasever %s \\\n", s.Base.Releasever))
+	fmt.Fprintf(&b, "    --releasever %s \\\n", s.Base.Releasever)
 	b.WriteString("    --setopt=install_weak_deps=false \\\n")
 	b.WriteString("    --setopt=tsflags=nodocs \\\n")
 	b.WriteString("    --setopt=override_install_langs=en_US.utf8 \\\n")
 	for i, pkg := range s.Packages {
 		if i < len(s.Packages)-1 {
-			b.WriteString(fmt.Sprintf("    %s \\\n", pkg))
+			fmt.Fprintf(&b, "    %s \\\n", pkg)
 		} else {
-			b.WriteString(fmt.Sprintf("    %s\n", pkg))
+			fmt.Fprintf(&b, "    %s\n", pkg)
 		}
 	}
 
@@ -90,7 +90,7 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 			if !first {
 				b.WriteString(" \\\n    && ")
 			}
-			b.WriteString(fmt.Sprintf("groupadd -R /chroot --gid %d %s", g.GID, g.Name))
+			fmt.Fprintf(&b, "groupadd -R /chroot --gid %d %s", g.GID, g.Name)
 			first = false
 		}
 		for _, u := range s.Accounts.Users {
@@ -112,7 +112,7 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(fmt.Sprintf("\nRUN dnf clean all --installroot /chroot --releasever %s\n", s.Base.Releasever))
+	fmt.Fprintf(&b, "\nRUN dnf clean all --installroot /chroot --releasever %s\n", s.Base.Releasever)
 
 	if s.IsImmutable() {
 		b.WriteString("\n# Remove the package manager for true immutability.\n")
