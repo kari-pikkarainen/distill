@@ -30,6 +30,40 @@ archives:
       - LICENSE
       - README.md
 
+nfpms:
+  - id: distill
+    package_name: distill
+    file_name_template: "{{ .ConventionalFileName }}"
+    homepage: "https://github.com/damnhandy/distill"
+    maintainer: "Ryan J. McDonough <ryan@damnhandy.com>"
+    description: "Build minimal, immutable OCI images from enterprise Linux base distributions"
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/distill/LICENSE
+      - src: ./README.md
+        dst: /usr/share/doc/distill/README.md
+
+brews:
+  - repository:
+      owner: damnhandy
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/damnhandy/distill"
+    description: "Build minimal, immutable OCI images from enterprise Linux base distributions"
+    license: Apache-2.0
+    install: |-
+      bin.install "distill"
+    test: |-
+      system "#{bin}/distill", "version"
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256

@@ -29,6 +29,83 @@ The package manager is never present in the final image — not removed as a lay
 | Debian Bookworm | APT | `debian:bookworm-slim` |
 | Ubuntu 24.04 | APT | `ubuntu:24.04` |
 
+## Installation
+
+### Homebrew (macOS and Linux)
+
+```bash
+brew tap damnhandy/tap
+brew install damnhandy/tap/distill
+```
+
+### Shell installer (Linux, macOS, Alpine, FreeBSD)
+
+```bash
+# Install latest to /usr/local/bin (may require sudo)
+curl -sfL https://raw.githubusercontent.com/damnhandy/distill/main/scripts/install.sh | sudo sh
+
+# Install to a directory you own (no sudo)
+curl -sfL https://raw.githubusercontent.com/damnhandy/distill/main/scripts/install.sh | sh -s -- -b ~/.local/bin
+
+# Install a specific version
+curl -sfL https://raw.githubusercontent.com/damnhandy/distill/main/scripts/install.sh | sh -s -- v1.2.3
+```
+
+### RPM (RHEL, Fedora, CentOS Stream, Rocky Linux, AlmaLinux)
+
+Download the `.rpm` from the [latest release](https://github.com/damnhandy/distill/releases/latest) and install:
+
+```bash
+sudo dnf localinstall distill_<version>_linux_amd64.rpm
+```
+
+### DEB (Debian, Ubuntu)
+
+Download the `.deb` from the [latest release](https://github.com/damnhandy/distill/releases/latest) and install:
+
+```bash
+sudo dpkg -i distill_<version>_linux_amd64.deb
+```
+
+### Nix / NixOS
+
+```bash
+# Install to your profile
+nix profile install github:damnhandy/distill
+
+# Pin to a specific version
+nix profile install github:damnhandy/distill/v1.2.3
+
+# Run without installing
+nix run github:damnhandy/distill -- --help
+```
+
+For NixOS, add to your `configuration.nix`:
+
+```nix
+{ inputs, ... }: {
+  environment.systemPackages = [ inputs.distill.packages.${system}.default ];
+}
+```
+
+For **devbox** users in other projects, add to `devbox.json`:
+
+```json
+{ "packages": ["github:damnhandy/distill#distill"] }
+```
+
+### go install
+
+```bash
+go install github.com/damnhandy/distill@latest
+```
+
+> **Note:** Binaries installed this way report version `dev` — Go's toolchain does not
+> support build-time version injection via `go install`. All other installation methods
+> report the correct release version.
+
+---
+
 ## Requirements
 
 - Linux host (or the provided devcontainer on macOS)
