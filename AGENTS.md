@@ -139,6 +139,25 @@ The linter configuration is in `.golangci.yml`. Do not disable linters inline
 5. Write unit tests for the script generator in
    `internal/builder/<name>_test.go`.
 
+## CI / release workflow notes
+
+### SLSA generator version pinning
+
+The release workflow (`.github/workflows/release.yml`) pins
+`slsa-framework/slsa-github-generator` to a specific version tag:
+
+```yaml
+uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+```
+
+**This must stay pinned to a specific tag — never use a floating `@v2` alias.**
+Pinning is a SLSA security requirement: the build platform must be immutable and
+auditable. When upgrading, update the tag to the new release and verify the
+[slsa-github-generator release notes](https://github.com/slsa-framework/slsa-github-generator/releases)
+for any breaking changes to the `base64-subjects` input format.
+
+---
+
 ## What not to do
 
 - Do not add error handling for conditions that cannot happen in normal program
