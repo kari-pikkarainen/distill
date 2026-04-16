@@ -65,7 +65,7 @@ var dependencies = []Dependency{
 	{
 		Name:        "cosign",
 		Required:    true,
-		UsedBy:      []string{"provenance"},
+		UsedBy:      []string{"provenance", "publish"},
 		Description: "Signs and attaches SLSA provenance attestations to OCI images",
 		MinVersion:  "2.0.0",
 		VersionArgs: []string{"version"},
@@ -73,7 +73,7 @@ var dependencies = []Dependency{
 	{
 		Name:        "syft",
 		Required:    true,
-		UsedBy:      []string{"attest"},
+		UsedBy:      []string{"attest", "publish", "build"},
 		Description: "Generates SPDX SBOMs for OCI images",
 		MinVersion:  "1.0.0",
 		VersionArgs: []string{"--version"},
@@ -81,7 +81,7 @@ var dependencies = []Dependency{
 	{
 		Name:        "grype",
 		Required:    true,
-		UsedBy:      []string{"scan"},
+		UsedBy:      []string{"scan", "publish", "build"},
 		Description: "Scans OCI images for known CVEs",
 		MinVersion:  "0.70.0",
 		VersionArgs: []string{"--version"},

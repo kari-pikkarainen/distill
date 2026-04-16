@@ -71,6 +71,11 @@ type ImageSpec struct {
 	// Runtime optionally installs a language runtime sourced directly from
 	// upstream rather than from the distro package manager.
 	Runtime *RuntimeSpec `yaml:"runtime,omitempty"`
+
+	// Pipeline declares supply-chain steps (scan, sbom, provenance) that run
+	// after a build or publish. All steps are opt-in; a nil pointer disables
+	// the step.
+	Pipeline *PipelineSpec `yaml:"pipeline,omitempty"`
 }
 
 // IsRuntime reports whether the package manager should be removed from the
@@ -195,6 +200,41 @@ type PathSpec struct {
 	Mode string `yaml:"mode,omitempty"`
 }
 
+// PipelineSpec declares which supply-chain operations run after a build or
+// publish. A nil pointer for any sub-spec means that step is disabled.
+type PipelineSpec struct {
+	Scan       *ScanSpec       `yaml:"scan,omitempty"`
+	SBOM       *SBOMSpec       `yaml:"sbom,omitempty"`
+	Provenance *ProvenanceSpec `yaml:"provenance,omitempty"`
+}
+
+// ScanSpec configures the Grype CVE scan pipeline step.
+type ScanSpec struct {
+	// Enabled controls whether the scan step runs.
+	Enabled bool `yaml:"enabled"`
+	// FailOn is the minimum severity that fails the build. Defaults to "critical".
+	// Valid values: critical, high, medium, low, negligible.
+	FailOn string `yaml:"fail-on,omitempty"`
+}
+
+// SBOMSpec configures the Syft SPDX SBOM generation pipeline step.
+type SBOMSpec struct {
+	// Enabled controls whether the SBOM step runs.
+	Enabled bool `yaml:"enabled"`
+	// Output is the path where the SPDX JSON SBOM is written.
+	// Defaults to "sbom.spdx.json".
+	Output string `yaml:"output,omitempty"`
+}
+
+// ProvenanceSpec configures the cosign SLSA provenance pipeline step.
+type ProvenanceSpec struct {
+	// Enabled controls whether the provenance step runs.
+	Enabled bool `yaml:"enabled"`
+	// Predicate is an optional path to write the raw predicate JSON for auditing.
+	// When empty, a temporary file is used and cleaned up automatically.
+	Predicate string `yaml:"predicate,omitempty"`
+}
+
 // RuntimeSpec installs a language runtime from an upstream binary distribution
 // rather than from the distro package manager.
 type RuntimeSpec struct {
@@ -220,7 +260,21 @@ func Parse(data []byte) (*ImageSpec, error) {
 	if s.Source.PackageManager == "" {
 		s.Source.PackageManager = InferPackageManager(s.Source.Image)
 	}
+	normalizePipeline(&s)
 	return &s, nil
+}
+
+// normalizePipeline fills in default values for omitted pipeline fields.
+func normalizePipeline(s *ImageSpec) {
+	if s.Pipeline == nil {
+		return
+	}
+	if s.Pipeline.Scan != nil && s.Pipeline.Scan.FailOn == "" {
+		s.Pipeline.Scan.FailOn = "critical"
+	}
+	if s.Pipeline.SBOM != nil && s.Pipeline.SBOM.Output == "" {
+		s.Pipeline.SBOM.Output = "sbom.spdx.json"
+	}
 }
 
 func validate(s *ImageSpec) error {
