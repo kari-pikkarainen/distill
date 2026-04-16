@@ -28,7 +28,7 @@ The package manager is never present in the final image — not removed as a lay
 ## ⚠️ Disclaimer
 
 > 🤖 **This project is an experiment.** `distill` is being built almost entirely by AI agents working from a written spec and a prototype — with little to no human actively writing code. It is an exploration of what agentic software development looks like in practice: can a useful, production-quality tool emerge from a spec, a prototype, and a swarm of agents?
-
+>
 > 🚧 **Early development.** This project is in its early stages. The CLI interface, the `.distill.yaml` spec schema, and any public APIs are all **subject to change without notice** as the project evolves. Do not rely on the current interface for production workloads until a stable release is tagged.
 
 ## Supported distributions
