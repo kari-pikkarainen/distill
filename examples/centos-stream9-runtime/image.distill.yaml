@@ -18,7 +18,7 @@ platforms:
 
 source:
   image: quay.io/centos/centos:stream9
-  releasever: "stream9"
+  releasever: "9"
 
 destination:
   image: ghcr.io/damnhandy/centos-stream9-distilled
