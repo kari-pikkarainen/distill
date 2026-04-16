@@ -75,7 +75,7 @@ func ScanJSON(ctx context.Context, image, failOn string) (*ScanJSONResult, error
 	}
 
 	var stdout bytes.Buffer
-	cmd := exec.CommandContext(ctx, "grype", image, "--output", "json") //nolint:gosec // G204
+	cmd := exec.CommandContext(ctx, "grype", image, "--output", "json")
 	cmd.Stdout = &stdout
 	cmd.Stderr = os.Stderr // progress output to stderr; doesn't interfere with JSON on stdout
 	// Ignore exit code — non-zero only means findings were found; we parse them ourselves.
