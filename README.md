@@ -4,7 +4,7 @@ What if you could strip an enterprise Linux image down to only what your applica
 
 `distill` is a CLI tool that takes a declarative `.distill.yaml` spec and produces a minimal `FROM scratch` OCI image using a chroot bootstrap strategy. The result — a **distilled image** — contains only the packages you listed, runs as a non-root user by default, and ships with a CVE scan, SBOM, and SLSA provenance baked into the build process. It is a self-hostable, distro-agnostic alternative to [Google distroless](https://github.com/GoogleContainerTools/distroless) or [Docker Hardened Images](https://www.docker.com/products/hardened-images/) for teams that need images rooted in RHEL, UBI, Debian, or Ubuntu.
 
-This project started as a collection of shell scripts before being rewritten as a proper CLI.
+This project started as a collection of shell scripts that used [Buildah](https://buildah.io/) to build images. The scripts produced small images, but Buildah wasn't the reason — the real trick was using chroot to install only the bare essentials into an isolated directory, then copying that into a `FROM scratch` image. Distill takes that same idea and wraps it into a simple, repeatable process.
 
 ### How much smaller?
 
