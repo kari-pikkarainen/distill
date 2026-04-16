@@ -355,13 +355,13 @@ See [`examples/`](./examples/):
 
 ## Comparison
 
-| | Google distroless | ubi9-micro | distill |
-|---|---|---|---|
-| Customizable packages | No | No | Yes |
-| Declarative spec | No | No | Yes |
-| Package manager removed | Yes | Yes | Yes |
-| Audit trail (RPM/dpkg DB) | No | No | Yes |
-| SBOM at build time | No | No | Yes |
-| SLSA provenance | No | No | Yes |
-| Multi-distro | No (Debian only) | No (RHEL only) | Yes |
-| Self-hostable build | No | No | Yes |
+| | Google distroless | ubi9-micro | Docker Hardened Images | distill |
+|---|---|---|---|---|
+| Customizable packages | No | No | No | Yes |
+| Declarative spec | No | No | No | Yes |
+| Package manager removed | Yes | Yes | Yes | Yes |
+| Audit trail (RPM/dpkg DB) | No | No | Yes | Yes |
+| SBOM at build time | No | No | Yes | Yes |
+| SLSA provenance | No | No | Yes | Yes |
+| Multi-distro | No (Debian only) | No (RHEL only) | Yes | Yes |
+| Self-hostable build | No | No | No | Yes |
