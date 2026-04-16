@@ -1,0 +1,61 @@
+# Minimal Rocky Linux 9 runtime image.
+#
+# Target: ≤30MB compressed
+#
+# Demonstrates distill against Rocky Linux 9, a RHEL-compatible rebuild
+# distribution using the same DNF-based package ecosystem.
+#
+# The package manager (dnf/rpm) is removed after installation.
+
+name: rocky9-runtime
+description: Minimal Rocky Linux 9 base runtime with no package manager
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: rockylinux:9
+  releasever: "9"
+
+destination:
+  image: ghcr.io/damnhandy/rocky9-distilled
+  releasever: latest
+
+contents:
+  packages:
+    - coreutils
+    - glibc
+    - libstdc++
+    - ca-certificates
+    - tzdata
+    - glibc-langpack-en
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
+cmd:
+  - /bin/bash
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true

@@ -25,6 +25,9 @@ jobs:
   build-examples:
     name: Build & Test Examples
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +40,22 @@ jobs:
             spec: examples/debian-runtime/image.distill.yaml
             test: examples/debian-runtime/test.yaml
             tag: ghcr.io/damnhandy/debian-distilled:latest
+          - name: centos-stream9-runtime
+            spec: examples/centos-stream9-runtime/image.distill.yaml
+            test: examples/centos-stream9-runtime/test.yaml
+            tag: ghcr.io/damnhandy/centos-stream9-distilled:latest
+          - name: rocky9-runtime
+            spec: examples/rocky9-runtime/image.distill.yaml
+            test: examples/rocky9-runtime/test.yaml
+            tag: ghcr.io/damnhandy/rocky9-distilled:latest
+          - name: alma9-runtime
+            spec: examples/alma9-runtime/image.distill.yaml
+            test: examples/alma9-runtime/test.yaml
+            tag: ghcr.io/damnhandy/alma9-distilled:latest
+          - name: ubuntu-runtime
+            spec: examples/ubuntu-runtime/image.distill.yaml
+            test: examples/ubuntu-runtime/test.yaml
+            tag: ghcr.io/damnhandy/ubuntu-distilled:latest
 
     steps:
       - uses: actions/checkout@v6
@@ -50,6 +69,18 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@v3
 
       - name: Build distill CLI
         run: >
@@ -82,8 +113,16 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
             | sh -s -- -b /usr/local/bin
 
+      - name: Publish image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DISTILL_CONTAINER_CLI: docker
+        run: ./distill publish --skip-build --spec ${{ matrix.example.spec }} --platform linux/amd64
+
       - name: Generate SBOM
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         run: ./distill attest --output sbom-${{ matrix.example.name }}.spdx.json ${{ matrix.example.tag }}
 
       - name: Scan for CVEs
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         run: ./distill scan --fail-on critical ${{ matrix.example.tag }}
