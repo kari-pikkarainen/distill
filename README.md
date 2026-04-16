@@ -19,7 +19,7 @@ The package manager is never present in the final image — not removed as a lay
 
 ## Supported distributions
 
-| Distribution | Package Manager | Example `base.image` |
+| Distribution | Package Manager | Example `source.image` |
 |---|---|---|
 | RHEL / UBI 9 | DNF | `registry.access.redhat.com/ubi9/ubi` |
 | CentOS Stream 9 | DNF | `quay.io/centos/centos:stream9` |
@@ -152,7 +152,7 @@ go build -o distill .
 ```bash
 # Scaffold with a known base distribution
 distill init --base ubi9 --name myapp
-distill init --base debian --name myservice --tag myregistry.io/myservice:latest
+distill init --base debian --name myservice --destination myregistry.io/myservice:latest
 distill init --base ubuntu --variant dev --output dev.distill.yaml
 
 # Available base values: ubi9, ubi8, fedora, debian, ubuntu, ubuntu22
@@ -160,11 +160,12 @@ distill init --base ubuntu --variant dev --output dev.distill.yaml
 
 ### Build an image
 
-Tags and platforms are declared in the spec file:
+The destination image and platforms are declared in the spec file:
 
 ```yaml
-tags:
-  - myregistry.io/myapp:latest
+destination:
+  image: myregistry.io/myapp
+  releasever: latest        # optional — defaults to "latest"
 platforms:
   - linux/amd64
   - linux/arm64
@@ -256,19 +257,20 @@ description: string             # optional
 # "runtime" removes it (default); "dev" retains it for development images.
 variant: runtime | dev
 
-# OCI image references applied to the built image.
-tags:
-  - myregistry.io/myapp:latest
-
 # Target build platforms. Defaults to [linux/amd64, linux/arm64] when omitted.
 platforms:
   - linux/amd64
   - linux/arm64
 
-base:
+source:
   image: string                 # required — OCI image ref for the build host
   releasever: string            # required — distro version ("9", "bookworm", etc.)
-  packageManager: dnf | apt    # optional — inferred from base.image if omitted
+  packageManager: dnf | apt    # optional — inferred from source.image if omitted
+
+# Destination OCI image reference for the built image. Optional.
+destination:
+  image: string                 # registry/name (e.g. myregistry.io/myapp)
+  releasever: string            # tag to apply; defaults to "latest" when omitted
 
 contents:
   packages:                     # required — list of packages to install
