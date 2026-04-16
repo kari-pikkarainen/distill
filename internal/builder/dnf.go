@@ -63,9 +63,14 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 	fmt.Fprintf(&b, "FROM %s AS builder\n", s.Source.Image)
 
 	b.WriteString("\n# Initialize a fresh RPM database and seed the repo configuration.\n")
+	b.WriteString("# /etc/dnf/vars/ carries distro-specific substitution variables (e.g.\n")
+	b.WriteString("# $rltype on Rocky Linux, $stream on CentOS Stream) that repo metalink\n")
+	b.WriteString("# URLs reference. Without them the chroot dnf resolves those tokens as\n")
+	b.WriteString("# literal strings, causing 404s. Copy them if present.\n")
 	b.WriteString("RUN rpm --root /chroot --initdb \\\n")
-	b.WriteString("    && mkdir -p /chroot/etc \\\n")
-	b.WriteString("    && cp -r /etc/yum.repos.d /chroot/etc/\n")
+	b.WriteString("    && mkdir -p /chroot/etc/dnf \\\n")
+	b.WriteString("    && cp -r /etc/yum.repos.d /chroot/etc/ \\\n")
+	b.WriteString("    && { cp -r /etc/dnf/vars /chroot/etc/dnf/ 2>/dev/null || true; }\n")
 
 	b.WriteString("\n# Install packages into the chroot.\n")
 	b.WriteString("RUN dnf install -y -q \\\n")

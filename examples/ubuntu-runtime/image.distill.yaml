@@ -1,0 +1,59 @@
+# Minimal Ubuntu 24.04 (Noble Numbat) runtime image.
+#
+# Target: ≤20MB compressed
+#
+# Demonstrates distill against Ubuntu 24.04 using the same APT backend
+# as the Debian Bookworm example.
+#
+# The package manager (apt/dpkg) is removed after installation.
+
+name: ubuntu-runtime
+description: Minimal Ubuntu 24.04 base runtime with no package manager
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: ubuntu:24.04
+  releasever: noble
+
+destination:
+  image: ghcr.io/damnhandy/ubuntu-distilled
+  releasever: latest
+
+contents:
+  packages:
+    - libc6
+    - libstdc++6
+    - ca-certificates
+    - tzdata
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /usr/sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
+cmd:
+  - /bin/sh
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true

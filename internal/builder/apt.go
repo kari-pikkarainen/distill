@@ -60,16 +60,50 @@ func aptDockerfile(s *spec.ImageSpec) string {
 
 	fmt.Fprintf(&b, "FROM %s AS builder\n", s.Source.Image)
 
+	// Suppress debconf prompts during debootstrap. Without this, packages such
+	// as tzdata hang indefinitely waiting for timezone input on Ubuntu images.
+	b.WriteString("ENV DEBIAN_FRONTEND=noninteractive\n")
+
 	b.WriteString("\n# Install debootstrap if not present in the base image.\n")
 	b.WriteString("RUN apt-get update -qq \\\n")
 	b.WriteString("    && apt-get install -y -qq debootstrap\n")
 
-	b.WriteString("\n# Bootstrap a minimal rootfs.\n")
-	b.WriteString("# --variant=minbase installs only Essential:yes packages plus the explicit list.\n")
-	fmt.Fprintf(&b, "RUN debootstrap --variant=minbase --include=%s %s /chroot\n",
-		strings.Join(s.Contents.Packages, ","),
-		s.Source.Releasever,
-	)
+	// Ubuntu's Essential package set includes init-system-helpers, which calls
+	// invoke-rc.d in its postinst and hangs inside a Docker build chroot without
+	// a policy-rc.d guard. We use --foreign to split debootstrap into two stages
+	// so we can inject policy-rc.d before the configure scripts run. This is also
+	// the correct approach for Debian, so we apply it uniformly.
+	b.WriteString("\n# Stage 1: download and unpack packages only (no postinst scripts yet).\n")
+	fmt.Fprintf(&b, "RUN debootstrap --foreign --variant=minbase --include=%s \\\n",
+		strings.Join(s.Contents.Packages, ","))
+	fmt.Fprintf(&b, "    %s /chroot %s\n", s.Source.Releasever, aptMirror(s.Source.Image))
+
+	// Ubuntu's init-system-helpers postinst calls multiple service management
+	// tools that hang inside a Docker build chroot:
+	//   - invoke-rc.d  → blocked by policy-rc.d
+	//   - deb-systemd-helper / deb-systemd-invoke → must be mocked directly
+	//   - systemctl    → must be mocked (not present in minbase, but searched)
+	// Replace all of them with no-op stubs before Stage 2 runs.
+	b.WriteString("\n# Stub out service/init tools to prevent hangs during Stage 2.\n")
+	b.WriteString("RUN printf '#!/bin/sh\\nexit 101\\n' > /chroot/usr/sbin/policy-rc.d \\\n")
+	b.WriteString("    && printf '#!/bin/sh\\nexit 0\\n'  > /chroot/usr/bin/deb-systemd-helper \\\n")
+	b.WriteString("    && printf '#!/bin/sh\\nexit 0\\n'  > /chroot/usr/bin/deb-systemd-invoke \\\n")
+	b.WriteString("    && printf '#!/bin/sh\\nexit 0\\n'  > /chroot/usr/bin/systemctl \\\n")
+	b.WriteString("    && chmod +x \\\n")
+	b.WriteString("        /chroot/usr/sbin/policy-rc.d \\\n")
+	b.WriteString("        /chroot/usr/bin/deb-systemd-helper \\\n")
+	b.WriteString("        /chroot/usr/bin/deb-systemd-invoke \\\n")
+	b.WriteString("        /chroot/usr/bin/systemctl\n")
+
+	b.WriteString("\n# Stage 2: run postinst scripts inside the chroot.\n")
+	b.WriteString("RUN chroot /chroot /debootstrap/debootstrap --second-stage\n")
+
+	b.WriteString("\n# Remove all stubs — none belong in the final runtime image.\n")
+	b.WriteString("RUN rm -f \\\n")
+	b.WriteString("    /chroot/usr/sbin/policy-rc.d \\\n")
+	b.WriteString("    /chroot/usr/bin/deb-systemd-helper \\\n")
+	b.WriteString("    /chroot/usr/bin/deb-systemd-invoke \\\n")
+	b.WriteString("    /chroot/usr/bin/systemctl\n")
 
 	if s.Accounts != nil && (len(s.Accounts.Groups) > 0 || len(s.Accounts.Users) > 0) {
 		b.WriteString("\n# Create groups and users inside the chroot.\n")
@@ -123,4 +157,14 @@ func aptDockerfile(s *spec.ImageSpec) string {
 	b.WriteString(scratchStageInstructions(s))
 
 	return b.String()
+}
+
+// aptMirror returns the canonical package archive URL for the given base image.
+// debootstrap requires an explicit mirror when the host and target distro differ,
+// and Ubuntu requires its own archive even when the host is Ubuntu.
+func aptMirror(image string) string {
+	if strings.Contains(image, "ubuntu") {
+		return "http://archive.ubuntu.com/ubuntu"
+	}
+	return "http://deb.debian.org/debian"
 }
