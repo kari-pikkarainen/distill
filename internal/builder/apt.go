@@ -60,6 +60,10 @@ func aptDockerfile(s *spec.ImageSpec) string {
 
 	fmt.Fprintf(&b, "FROM %s AS builder\n", s.Source.Image)
 
+	// Suppress debconf prompts during debootstrap. Without this, packages such
+	// as tzdata hang indefinitely waiting for timezone input on Ubuntu images.
+	b.WriteString("ENV DEBIAN_FRONTEND=noninteractive\n")
+
 	b.WriteString("\n# Install debootstrap if not present in the base image.\n")
 	b.WriteString("RUN apt-get update -qq \\\n")
 	b.WriteString("    && apt-get install -y -qq debootstrap\n")
