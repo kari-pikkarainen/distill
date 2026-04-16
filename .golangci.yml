@@ -66,10 +66,10 @@ linters:
       # Security rules are relaxed in tests.
       - linters: [gosec]
         path: "_test\\.go"
-      # run() is a trusted internal wrapper; callers are responsible for input validation.
-      # G204 (subprocess with variable args) is a false positive here.
+      # Builder functions invoke fixed external binaries (grype, syft, cosign, podman, docker).
+      # G204 (subprocess with variable args) is a false positive for these controlled invocations.
       - linters: [gosec]
-        path: "internal/builder/run\\.go"
+        path: "internal/builder"
         text: "G204"
 
 formatters:

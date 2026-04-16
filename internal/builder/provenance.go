@@ -149,7 +149,7 @@ func imageDigest(ctx context.Context, image string) (string, error) {
 	if _, err := exec.LookPath("skopeo"); err != nil {
 		return "", fmt.Errorf("skopeo not found on PATH")
 	}
-	out, err := exec.CommandContext(ctx, "skopeo", "inspect", "docker://"+image).Output() //nolint:gosec // G204: image is sourced from the validated spec base.image field
+	out, err := exec.CommandContext(ctx, "skopeo", "inspect", "docker://"+image).Output()
 	if err != nil {
 		return "", fmt.Errorf("skopeo inspect: %w", err)
 	}
