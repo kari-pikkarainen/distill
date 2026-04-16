@@ -173,6 +173,101 @@ func TestDestinationSpec_Ref(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+// Pipeline parsing and normalization
+// ----------------------------------------------------------------------------
+
+func TestParse_Pipeline(t *testing.T) {
+	t.Run("pipeline nil when omitted", func(t *testing.T) {
+		yml := `
+name: test
+source:
+  image: registry.access.redhat.com/ubi9/ubi
+  releasever: "9"
+contents:
+  packages:
+    - glibc
+`
+		s, err := Parse([]byte(yml))
+		require.NoError(t, err)
+		assert.Nil(t, s.Pipeline)
+	})
+
+	t.Run("pipeline defaults applied", func(t *testing.T) {
+		yml := `
+name: test
+source:
+  image: registry.access.redhat.com/ubi9/ubi
+  releasever: "9"
+contents:
+  packages:
+    - glibc
+pipeline:
+  scan:
+    enabled: true
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true
+`
+		s, err := Parse([]byte(yml))
+		require.NoError(t, err)
+		require.NotNil(t, s.Pipeline)
+		require.NotNil(t, s.Pipeline.Scan)
+		assert.True(t, s.Pipeline.Scan.Enabled)
+		assert.Equal(t, "critical", s.Pipeline.Scan.FailOn)
+		require.NotNil(t, s.Pipeline.SBOM)
+		assert.True(t, s.Pipeline.SBOM.Enabled)
+		assert.Equal(t, "sbom.spdx.json", s.Pipeline.SBOM.Output)
+		require.NotNil(t, s.Pipeline.Provenance)
+		assert.True(t, s.Pipeline.Provenance.Enabled)
+	})
+
+	t.Run("explicit pipeline values not overridden by defaults", func(t *testing.T) {
+		yml := `
+name: test
+source:
+  image: registry.access.redhat.com/ubi9/ubi
+  releasever: "9"
+contents:
+  packages:
+    - glibc
+pipeline:
+  scan:
+    enabled: true
+    fail-on: high
+  sbom:
+    enabled: true
+    output: custom-sbom.spdx.json
+`
+		s, err := Parse([]byte(yml))
+		require.NoError(t, err)
+		assert.Equal(t, "high", s.Pipeline.Scan.FailOn)
+		assert.Equal(t, "custom-sbom.spdx.json", s.Pipeline.SBOM.Output)
+	})
+
+	t.Run("disabled steps with nil sub-specs", func(t *testing.T) {
+		yml := `
+name: test
+source:
+  image: registry.access.redhat.com/ubi9/ubi
+  releasever: "9"
+contents:
+  packages:
+    - glibc
+pipeline:
+  scan:
+    enabled: true
+`
+		s, err := Parse([]byte(yml))
+		require.NoError(t, err)
+		require.NotNil(t, s.Pipeline)
+		require.NotNil(t, s.Pipeline.Scan)
+		assert.Nil(t, s.Pipeline.SBOM)
+		assert.Nil(t, s.Pipeline.Provenance)
+	})
+}
+
+// ----------------------------------------------------------------------------
 // IsRuntime
 // ----------------------------------------------------------------------------
 

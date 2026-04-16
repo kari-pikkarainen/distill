@@ -125,10 +125,10 @@ go install github.com/damnhandy/distill@latest
 ## Requirements
 
 - macOS or Windows with Docker Desktop 3.0+, or Linux/WSL2 with Podman 3.0+
-- `grype` — for `distill scan` (optional)
-- `syft` — for `distill attest` (optional)
-- `cosign` — for `distill provenance` (optional)
-- `skopeo` — for base-image digest resolution in `distill provenance` (optional)
+- `grype` — for `distill scan`, `distill publish`, and `distill build --pipeline` (optional)
+- `syft` — for `distill attest`, `distill publish`, and `distill build --pipeline` (optional)
+- `cosign` — for `distill provenance` and `distill publish` (optional)
+- `skopeo` — for base-image digest resolution in provenance (optional)
 
 Run `distill doctor` to check your environment and get install instructions for any missing tools.
 
@@ -177,34 +177,53 @@ distill build --spec image.distill.yaml
 
 # Override to build a single platform
 distill build --spec image.distill.yaml --platform linux/arm64
+
+# Build and run pipeline steps (scan, sbom) on the local image
+distill build --spec image.distill.yaml --pipeline
 ```
 
-### Scan for CVEs
+### Publish an image
+
+`distill publish` is the full deployment workflow. It runs in order:
+
+1. Build all platforms
+2. Scan for CVEs — fails before pushing a vulnerable image
+3. Push to the registry
+4. Generate SBOM
+5. Attach SLSA provenance
+
+Which steps run is controlled by the `pipeline:` section of the spec (see [Spec reference](#spec-reference)). Steps 2, 4, and 5 are skipped when the corresponding pipeline entry is absent or disabled.
 
 ```bash
+# Full workflow: build → scan → push → sbom → provenance
+distill publish --spec image.distill.yaml
+
+# Push only (skip all pipeline steps)
+distill publish --spec image.distill.yaml --skip-pipeline
+
+# Skip build (push and run pipeline on an already-built local image)
+distill publish --spec image.distill.yaml --skip-build
+
+# Publish a single platform only
+distill publish --spec image.distill.yaml --platform linux/amd64
+```
+
+### Scan, attest, and provenance (standalone)
+
+These commands operate on any OCI image reference — useful for one-off inspection or images not built with distill.
+
+```bash
+# Scan for CVEs
 distill scan myregistry.io/myapp:latest
-
-# Fail on high severity or above
 distill scan --fail-on high myregistry.io/myapp:latest
-```
 
-### Generate an SBOM
-
-```bash
+# Generate an SBOM
 distill attest myregistry.io/myapp:latest
 distill attest --output sbom.spdx.json myregistry.io/myapp:latest
-```
 
-### Attach SLSA provenance
-
-```bash
-# Minimal provenance (builder identity only)
+# Attach SLSA provenance
 distill provenance myregistry.io/myapp:latest
-
-# Enriched provenance — includes spec digest, base-image digest, and parameters
 distill provenance --spec image.distill.yaml myregistry.io/myapp:latest
-
-# Save the predicate JSON for auditing
 distill provenance --spec image.distill.yaml --predicate provenance.json myregistry.io/myapp:latest
 ```
 
@@ -231,11 +250,11 @@ distill applies supply-chain security at two levels:
 
 **Images you build with distill:**
 
-| Artifact | Tool | Command |
-|---|---|---|
-| SPDX SBOM | syft | `distill attest <image>` |
-| SLSA v0.2 provenance | cosign | `distill provenance <image>` |
-| CVE scan | grype | `distill scan <image>` |
+| Artifact | Tool | Automated | Standalone |
+|---|---|---|---|
+| CVE scan | grype | `distill publish` / `distill build --pipeline` | `distill scan <image>` |
+| SPDX SBOM | syft | `distill publish` / `distill build --pipeline` | `distill attest <image>` |
+| SLSA v0.2 provenance | cosign | `distill publish` | `distill provenance <image>` |
 
 **The distill binary itself:**
 
@@ -312,6 +331,19 @@ paths:
     uid: 10001
     gid: 10001
     mode: "0755"
+
+# pipeline declares supply-chain steps that run after distill build --pipeline
+# or distill publish. Omit any sub-section to disable that step.
+pipeline:
+  scan:
+    enabled: true | false
+    fail-on: critical           # optional — critical | high | medium | low | negligible
+  sbom:
+    enabled: true | false
+    output: sbom.spdx.json      # optional — path for the SPDX JSON file
+  provenance:
+    enabled: true | false
+    predicate: string           # optional — path to write predicate JSON for auditing
 ```
 
 ## Examples
@@ -323,13 +355,13 @@ See [`examples/`](./examples/):
 
 ## Comparison
 
-| | Google distroless | ubi9-micro | distill |
-|---|---|---|---|
-| Customizable packages | No | No | Yes |
-| Declarative spec | No | No | Yes |
-| Package manager removed | Yes | Yes | Yes |
-| Audit trail (RPM/dpkg DB) | No | No | Yes |
-| SBOM at build time | No | No | Yes |
-| SLSA provenance | No | No | Yes |
-| Multi-distro | No (Debian only) | No (RHEL only) | Yes |
-| Self-hostable build | No | No | Yes |
+| | Google distroless | ubi9-micro | Docker Hardened Images | distill |
+|---|---|---|---|---|
+| Customizable packages | No | No | No | Yes |
+| Declarative spec | No | No | No | Yes |
+| Package manager removed | Yes | Yes | Yes | Yes |
+| Audit trail (RPM/dpkg DB) | No | No | Yes | Yes |
+| SBOM at build time | No | No | Yes | Yes |
+| SLSA provenance | No | No | Yes | Yes |
+| Multi-distro | No (Debian only) | No (RHEL only) | No (Wolfi/Alpine only) | Yes |
+| Self-hostable build | No | No | No | Yes |

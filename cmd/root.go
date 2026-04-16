@@ -31,6 +31,7 @@ func init() {
 	rootCmd.AddCommand(
 		newInitCmd(),
 		newBuildCmd(),
+		newPublishCmd(),
 		newScanCmd(),
 		newAttestCmd(),
 		newProvenanceCmd(),

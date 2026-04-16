@@ -163,6 +163,17 @@ cmd:
 #     uid: 10001
 #     gid: 10001
 #     mode: "0755"
+
+# pipeline declares supply-chain steps that run after distill build --pipeline
+# or distill publish. Remove the comment markers to enable individual steps.
+# pipeline:
+#   scan:
+#     enabled: true
+#     fail-on: critical
+#   sbom:
+#     enabled: true
+#   provenance:
+#     enabled: true
 `))
 
 func newInitCmd() *cobra.Command {

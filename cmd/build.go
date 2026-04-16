@@ -15,6 +15,7 @@ func newBuildCmd() *cobra.Command {
 	var (
 		specFile         string
 		platformOverride string
+		runPipeline      bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,22 +43,29 @@ Container runtime is selected automatically based on the host OS:
   Linux / WSL2     — podman build
 
 The --platform flag overrides the spec's platforms list and builds only
-the specified platform.`,
+the specified platform.
+
+Use --pipeline to run the supply-chain steps declared in the spec's pipeline
+section (scan, sbom) after the build completes. These steps operate on the
+locally-built image and do not require a registry push. Provenance attestation
+requires a push and runs only via "distill publish".`,
 		Example: `  distill build --spec examples/rhel9-runtime/image.distill.yaml
-  distill build --spec image.distill.yaml --platform linux/arm64`,
+  distill build --spec image.distill.yaml --platform linux/arm64
+  distill build --spec image.distill.yaml --pipeline`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runBuild(cmd.Context(), specFile, platformOverride)
+			return runBuild(cmd.Context(), specFile, platformOverride, runPipeline)
 		},
 	}
 
 	cmd.Flags().StringVarP(&specFile, "spec", "s", "", "Path to the .distill.yaml spec file (required)")
 	cmd.Flags().StringVar(&platformOverride, "platform", "", "Override platform (e.g. linux/arm64); builds only this platform")
+	cmd.Flags().BoolVar(&runPipeline, "pipeline", false, "Run pipeline steps (scan, sbom) defined in the spec after building")
 	_ = cmd.MarkFlagRequired("spec")
 
 	return cmd
 }
 
-func runBuild(ctx context.Context, specFile, platformOverride string) error {
+func runBuild(ctx context.Context, specFile, platformOverride string, pipeline bool) error {
 	data, err := os.ReadFile(specFile) //nolint:gosec // G304: specFile is a CLI argument provided by the operator
 	if err != nil {
 		return fmt.Errorf("reading spec %q: %w", specFile, err)
@@ -87,6 +95,15 @@ func runBuild(ctx context.Context, specFile, platformOverride string) error {
 
 	for _, platform := range platforms {
 		if err := b.Build(ctx, imageSpec, platform); err != nil {
+			return err
+		}
+	}
+
+	if pipeline {
+		if imageSpec.Destination == nil || imageSpec.Destination.Image == "" {
+			return fmt.Errorf("--pipeline requires destination.image to be set in the spec")
+		}
+		if err := builder.RunPipeline(ctx, imageSpec, imageSpec.Destination.Ref(), specFile, builder.PipelineModeLocal); err != nil {
 			return err
 		}
 	}
