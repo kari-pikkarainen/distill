@@ -1,0 +1,6 @@
+cosign.key
+*.pem
+*.p12
+# Public key is committable only if it should be pinned in config.
+# For Wave 0 each developer generates their own, so exclude it too.
+cosign.pub

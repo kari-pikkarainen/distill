@@ -1,0 +1,52 @@
+name: base-ubi9
+description: Minimal UBI9 base runtime — the foundation for all RHEL9-derived images
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: docker.io/redhat/ubi9
+  releasever: "9"
+
+destination:
+  image: localhost:5000/base-ubi9
+  releasever: latest
+
+contents:
+  packages:
+    - coreutils
+    - glibc
+    - libstdc++
+    - ca-certificates
+    - tzdata
+    - glibc-langpack-en
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
+cmd:
+  - /bin/bash
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true

@@ -1,0 +1,17 @@
+image: base-ubi9
+
+size-budget:
+  compressed-mb: 30
+  uncompressed-mb: 90
+
+cve-thresholds:
+  critical: 0
+  high: 0
+
+compliance-baseline:
+  - soc2-cc7.1
+  - stig-baseline
+
+functional-smoke:
+  command: ["/bin/bash", "-c", "echo ok && bash --version"]
+  expected-output: "ok"

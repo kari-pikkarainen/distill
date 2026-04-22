@@ -22,6 +22,12 @@ result-*
 # ── devbox ───────────────────────────────────────────────────────────────────
 .devbox/
 
+# ── Wave 0 / local test bench outputs ────────────────────────────────────────
+# Regenerated on every `devbox run mvp-local` run — not committable.
+/evidence/
+/test/bench/report/
+/site/local/
+
 # ── Claude Code ──────────────────────────────────────────────────────────────
 # Track .claude/ (AGENTS.md, commands, etc.) but exclude machine-local settings
 .claude/settings.local.json

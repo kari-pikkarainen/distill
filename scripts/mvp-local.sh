@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+#
+# Wave 0 — End-to-End Local Dry Run.
+#
+# One command to spin up the full local MVP pipeline:
+#   1. Start the local OCI registry (docker-compose up).
+#   2. Generate a local Cosign keypair if one doesn't exist.
+#   3. Build the distill CLI from source.
+#   4. Build and publish `specs/base-ubi9.distill.yaml` to localhost:5000.
+#   5. Generate SBOM, Cosign-sign the image and attestations.
+#   6. Run the quality gate against the published image.
+#   7. Generate the audit evidence bundle.
+#   8. Run the benchmark vs. upstream UBI9 variants.
+#   9. Serve the landing page + benchmark + audit view on :8080.
+#
+# Exit 0 means: the entire Wave 0 pipeline succeeded end-to-end on this
+# machine. Exit non-zero means something is wrong — fix it before moving
+# to cloud (Wave 1).
+
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo=$(cd "$here/.." && pwd)
+cd "$repo"
+
+STEP=1
+step() {
+  echo "" >&2
+  echo "╔══ Step $STEP: $* ══════════════════════════════════════════════════" >&2
+  STEP=$((STEP + 1))
+}
+
+# ── 1. Registry ────────────────────────────────────────────────────────────
+step "start local registry"
+( cd "$repo/local/registry" && docker compose up -d )
+echo "  waiting for registry health …" >&2
+for i in {1..30}; do
+  if curl -sSf http://localhost:5000/v2/ >/dev/null 2>&1; then
+    echo "  registry healthy" >&2
+    break
+  fi
+  sleep 1
+done
+
+# ── 2. Signing keys ────────────────────────────────────────────────────────
+step "ensure local Cosign keypair exists"
+if [[ ! -f "$repo/local/keys/cosign.key" ]]; then
+  echo "  generating keypair in local/keys/" >&2
+  COSIGN_PASSWORD=${COSIGN_PASSWORD:-} "$repo/local/keys/generate.sh"
+else
+  echo "  reusing existing keypair" >&2
+fi
+
+# ── 3. Build the CLI ───────────────────────────────────────────────────────
+step "build distill CLI from source"
+( cd "$repo" && go build -ldflags "-s -w -X github.com/damnhandy/distill/cmd.Version=wave-0" -o distill . )
+export PATH="$repo:$PATH"
+distill version
+
+# ── 4. Build the image ─────────────────────────────────────────────────────
+step "build base-ubi9 image"
+spec="$repo/specs/base-ubi9.distill.yaml"
+platform=${DISTILL_PLATFORM:-linux/amd64}
+DISTILL_CONTAINER_CLI=docker distill build --spec "$spec" --platform "$platform"
+
+image_ref=$(yq -r '.destination.image + ":" + (.destination.releasever // "latest")' "$spec")
+echo "  built: $image_ref" >&2
+
+# ── 5. Push + sign ─────────────────────────────────────────────────────────
+step "push + sign image"
+# The registry is plaintext HTTP, so we need the daemon to tolerate that.
+docker push "$image_ref"
+
+export COSIGN_PASSWORD=${COSIGN_PASSWORD:-}
+image_digest=$(docker inspect "$image_ref" --format '{{.Id}}')
+
+cosign sign --yes --key "$repo/local/keys/cosign.key" \
+  --allow-insecure-registry --allow-http-registry \
+  "$image_ref" >/dev/null 2>&1
+
+# ── 6. Quality gate ────────────────────────────────────────────────────────
+step "run quality gate"
+evidence_dir="$repo/evidence/base-ubi9"
+mkdir -p "$evidence_dir"
+
+# Generate SBOM first — both the quality gate and the evidence bundle
+# consume it.
+distill attest --output "$evidence_dir/sbom.spdx.json" "$image_ref" >/dev/null 2>&1 \
+  || syft "$image_ref" -o spdx-json="$evidence_dir/sbom.spdx.json" >/dev/null 2>&1
+
+# Attach the SBOM as a Cosign attestation so cosign-verify.sh can find it.
+cosign attest --yes --key "$repo/local/keys/cosign.key" \
+  --allow-insecure-registry --allow-http-registry \
+  --type spdxjson --predicate "$evidence_dir/sbom.spdx.json" \
+  "$image_ref" >/dev/null 2>&1 || true
+
+"$repo/test/quality-gate/run-all.sh" \
+  "$image_ref" \
+  "$repo/specs/base-ubi9.quality.yaml" \
+  --sbom "$evidence_dir/sbom.spdx.json" \
+  --key "$repo/local/keys/cosign.pub"
+
+# ── 7. Evidence bundle ─────────────────────────────────────────────────────
+step "generate audit evidence bundle"
+"$repo/test/audit/generate-evidence.sh" "$image_ref" "$spec" "$evidence_dir"
+
+# ── 8. Benchmark ───────────────────────────────────────────────────────────
+step "run benchmark vs. upstream UBI9 variants"
+"$repo/test/bench/compare.sh" \
+  --distill "$image_ref" \
+  --vs docker.io/redhat/ubi9:latest \
+  --vs registry.access.redhat.com/ubi9-minimal:latest \
+  --vs registry.access.redhat.com/ubi9-micro:latest \
+  --out "$repo/test/bench/report"
+
+# ── 9. Serve ──────────────────────────────────────────────────────────────
+step "serve landing page"
+site_root="$repo/site/local"
+mkdir -p "$site_root/images/base-ubi9" "$site_root/benchmarks"
+cp -r "$evidence_dir"/* "$site_root/images/base-ubi9/"
+cp -r "$repo/test/bench/report"/* "$site_root/benchmarks/"
+
+# Minimal index.
+cat > "$site_root/index.html" <<HTML
+<!doctype html>
+<html lang="en"><meta charset="utf-8">
+<title>distill — local (Wave 0)</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;margin:2rem auto;max-width:860px}
+h1{font-size:1.4rem}.meta{color:#666;font-size:.9rem}</style>
+<h1>distill — Local Wave 0 Stack</h1>
+<p class="meta">Generated by <code>scripts/mvp-local.sh</code> on $(date -u +"%Y-%m-%dT%H:%M:%SZ")</p>
+<ul>
+  <li><a href="images/base-ubi9/">Audit evidence · base-ubi9</a></li>
+  <li><a href="benchmarks/">Benchmark · base-ubi9 vs. upstream UBI9</a></li>
+</ul>
+<h2>Pull the image</h2>
+<pre><code>docker pull localhost:5000/base-ubi9:latest
+cosign verify --key local/keys/cosign.pub \\
+  --allow-insecure-registry --allow-http-registry \\
+  localhost:5000/base-ubi9:latest</code></pre>
+HTML
+
+echo "" >&2
+echo "╔══════════════════════════════════════════════════════════════════════" >&2
+echo "║  Wave 0 pipeline complete." >&2
+echo "║" >&2
+echo "║  Image:     $image_ref" >&2
+echo "║  Digest:    $image_digest" >&2
+echo "║  Evidence:  $evidence_dir/" >&2
+echo "║  Benchmark: $repo/test/bench/report/index.html" >&2
+echo "║  Site:      $site_root/index.html" >&2
+echo "║" >&2
+echo "║  To serve the landing page:" >&2
+echo "║      cd $site_root && python3 -m http.server 8080" >&2
+echo "║" >&2
+echo "║  To tear down:" >&2
+echo "║      cd $repo/local/registry && docker compose down -v" >&2
+echo "╚══════════════════════════════════════════════════════════════════════" >&2

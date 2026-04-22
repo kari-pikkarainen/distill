@@ -96,6 +96,39 @@
         "  \"${1:?Usage: devbox run verify-slsa <image:tag> <provenance>}\" \\",
         "  --provenance-path \"${2:?missing provenance file}\" \\",
         "  --source-uri \"github.com/damnhandy/distill\""
+      ],
+      "mvp-local": [
+        "# Wave 0 — run the full local MVP pipeline end-to-end.",
+        "# See scripts/mvp-local.sh for the step-by-step breakdown.",
+        "./scripts/mvp-local.sh"
+      ],
+      "mvp-local-down": [
+        "# Wave 0 — tear down the local registry and its data volume.",
+        "cd local/registry && docker compose down -v"
+      ],
+      "quality-gate": [
+        "# Usage: devbox run quality-gate <image:tag> <quality-file> [--sbom <sbom>] [--key <cosign.pub>]",
+        "# Runs all in-line quality-gate checks against a published image.",
+        "./test/quality-gate/run-all.sh \"$@\""
+      ],
+      "bench": [
+        "# Wave 0 benchmark: distill base-ubi9 vs. upstream UBI9 variants.",
+        "./test/bench/compare.sh \\",
+        "  --distill \"${DISTILL_IMAGE:-localhost:5000/base-ubi9:latest}\" \\",
+        "  --vs docker.io/redhat/ubi9:latest \\",
+        "  --vs registry.access.redhat.com/ubi9-minimal:latest \\",
+        "  --vs registry.access.redhat.com/ubi9-micro:latest \\",
+        "  --out test/bench/report"
+      ],
+      "evidence": [
+        "# Usage: devbox run evidence <image:tag> <spec-file> <output-dir>",
+        "# Generate the audit evidence bundle (SBOM + scans + provenance + compliance map).",
+        "./test/audit/generate-evidence.sh \"$@\""
+      ],
+      "reproducibility": [
+        "# Usage: devbox run reproducibility <spec-file> [runs]",
+        "# Build the image N times and verify digests match. Default runs=2.",
+        "./test/quality-gate/reproducibility.sh \"$@\""
       ]
     }
   }
