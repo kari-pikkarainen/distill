@@ -1,0 +1,58 @@
+name: base-ubi9-minimal
+description: |
+  Maximally-minimal UBI9 base for static-binary workloads. Drops bash,
+  coreutils, and related shell utilities. Use when your application is
+  a single statically-linked binary (Go, Rust, C compiled with -static)
+  that needs only glibc, certificate trust, and timezone data.
+
+  If your app needs /bin/sh or any coreutils (cp, rm, ls, mkdir…),
+  use specs/base-ubi9.distill.yaml instead.
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: docker.io/redhat/ubi9
+  releasever: "9"
+
+destination:
+  image: localhost:5555/base-ubi9-minimal
+  releasever: latest
+
+contents:
+  packages:
+    # Only the structural minimum. Each one earns its place:
+    - glibc              # C runtime; cannot run any binary without it
+    - ca-certificates    # TLS trust anchors
+    - tzdata             # timezone data for date/log formatting
+    - glibc-langpack-en  # UTF-8 locale; prevents mojibake in logs
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+
+# No CMD — this base is meant to be extended by a FROM downstream spec
+# that adds the actual application binary and sets its own CMD.
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true
