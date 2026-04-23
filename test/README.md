@@ -30,9 +30,9 @@ Every script is callable directly or via a devbox alias:
 devbox run mvp-local
 
 # Individual checks
-devbox run quality-gate localhost:5000/base-ubi9:latest specs/base-ubi9.quality.yaml
+devbox run quality-gate localhost:5555/base-ubi9:latest specs/base-ubi9.quality.yaml
 devbox run bench
-devbox run evidence localhost:5000/base-ubi9:latest specs/base-ubi9.distill.yaml evidence/base-ubi9/
+devbox run evidence localhost:5555/base-ubi9:latest specs/base-ubi9.distill.yaml evidence/base-ubi9/
 devbox run reproducibility specs/base-ubi9.distill.yaml 3
 ```
 

@@ -17,7 +17,7 @@
 #
 # Example:
 #   compare.sh \
-#     --distill localhost:5000/base-ubi9:latest \
+#     --distill localhost:5555/base-ubi9:latest \
 #     --vs docker.io/redhat/ubi9:latest \
 #     --vs registry.access.redhat.com/ubi9-minimal:latest \
 #     --vs registry.access.redhat.com/ubi9-micro:latest \
@@ -85,16 +85,40 @@ measure() {
   local package_count
   package_count=$(syft "$image" -o json 2>/dev/null | jq '.artifacts | length' 2>/dev/null || echo 0)
 
-  # Sizes.
-  local uncompressed_mb compressed_mb
-  uncompressed_mb=$((
-    $("$cli" image inspect "$image" --format '{{.Size}}' 2>/dev/null || echo 0)
-    / 1024 / 1024
-  ))
-  compressed_mb=$((
-    $("$cli" manifest inspect "$image" 2>/dev/null | jq '[.layers[]?.size // 0] | add // 0')
-    / 1024 / 1024
-  ))
+  # Sizes. Uncompressed comes from the local daemon's cached image; compressed
+  # comes from the registry-side manifest. For multi-arch images (OCI image
+  # index) we descend to the amd64 child manifest, the same way size-budget.sh
+  # does it. Defensive defaults keep set -u happy when any step returns empty.
+  local uncompressed_bytes compressed_bytes uncompressed_mb compressed_mb
+  uncompressed_bytes=$("$cli" image inspect "$image" --format '{{.Size}}' 2>/dev/null || echo 0)
+  uncompressed_bytes=${uncompressed_bytes:-0}
+  uncompressed_mb=$(( uncompressed_bytes / 1024 / 1024 ))
+
+  compressed_bytes=0
+  if command -v skopeo >/dev/null 2>&1; then
+    # macOS bash 3.2 dislikes empty-array expansion under `set -u`, so we
+    # build the skopeo command as a string and invoke it twice if needed.
+    local skopeo_tls=""
+    [[ $image == localhost:* || $image == 127.0.0.1:* ]] && skopeo_tls="--tls-verify=false"
+    local raw mediatype
+    raw=$(skopeo inspect $skopeo_tls --raw "docker://$image" 2>/dev/null || echo '{}')
+    mediatype=$(echo "$raw" | jq -r '.mediaType // ""')
+    if [[ $mediatype == *"image.index"* || $mediatype == *"manifest.list"* ]]; then
+      local child_digest repo child_raw
+      child_digest=$(echo "$raw" \
+        | jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest' \
+        | head -1)
+      if [[ -n $child_digest ]]; then
+        repo=${image%@*}; repo=${repo%:*}
+        child_raw=$(skopeo inspect $skopeo_tls --raw "docker://${repo}@${child_digest}" 2>/dev/null || echo '{}')
+        compressed_bytes=$(echo "$child_raw" | jq '[.layers[]?.size // 0] | add // 0')
+      fi
+    else
+      compressed_bytes=$(echo "$raw" | jq '[.layers[]?.size // 0] | add // 0')
+    fi
+  fi
+  compressed_bytes=${compressed_bytes:-0}
+  compressed_mb=$(( compressed_bytes / 1024 / 1024 ))
 
   # Image digest.
   local digest

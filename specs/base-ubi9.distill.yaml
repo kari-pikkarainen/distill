@@ -12,7 +12,7 @@ source:
   releasever: "9"
 
 destination:
-  image: localhost:5000/base-ubi9
+  image: localhost:5555/base-ubi9
   releasever: latest
 
 contents:

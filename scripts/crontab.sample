@@ -1,0 +1,17 @@
+# Sample crontab for local Wave 0 daily-rebuild simulation.
+#
+# Install with:
+#   crontab /path/to/distill/scripts/crontab.sample
+#
+# Or merge with your existing crontab via `crontab -e`.
+#
+# This is the local equivalent of what a real scheduler does in production
+# (Wave 2+): upstream watcher runs every 15 minutes, daily fallback ensures
+# nothing goes unpatched past 24h even if the watcher misses a change.
+
+# Every 15 minutes — check if upstream UBI9 has changed.
+*/15 * * * * cd /Users/YOUR_USERNAME/Devel/distill && ./scripts/rebuild-scheduler.sh once >> /tmp/distill-scheduler.log 2>&1
+
+# Daily fallback at 02:00 local time — force a rebuild even if no upstream
+# change was detected, as a safety net for missed signals.
+0 2 * * * cd /Users/YOUR_USERNAME/Devel/distill && ./scripts/rebuild-scheduler.sh once --force >> /tmp/distill-scheduler.log 2>&1

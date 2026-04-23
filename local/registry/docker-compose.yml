@@ -5,7 +5,7 @@ services:
     image: registry:3
     container_name: distill-local-registry
     ports:
-      - "5000:5000"
+      - "5555:5000"
     environment:
       REGISTRY_STORAGE_DELETE_ENABLED: "true"
       REGISTRY_HTTP_ADDR: "0.0.0.0:5000"
@@ -22,7 +22,7 @@ services:
 
   # ── docker-hub-cache (opt-in via --profile cache) ─────────────────────────
   # Pull-through cache for Docker Hub. When enabled, configure your local
-  # Docker daemon to use http://localhost:5001 as a registry mirror — then
+  # Docker daemon to use http://localhost:5556 as a registry mirror — then
   # `docker pull ubuntu:24.04` goes through the cache transparently. First
   # pull hits Docker Hub; every subsequent pull is local.
   #
@@ -36,7 +36,7 @@ services:
     container_name: distill-dockerhub-cache
     profiles: [cache]
     ports:
-      - "5001:5000"
+      - "5556:5000"
     environment:
       REGISTRY_PROXY_REMOTEURL: "https://registry-1.docker.io"
       REGISTRY_PROXY_USERNAME: "${DOCKERHUB_USER:-}"
@@ -62,7 +62,7 @@ services:
     container_name: distill-redhat-cache
     profiles: [cache]
     ports:
-      - "5002:5000"
+      - "5557:5000"
     environment:
       REGISTRY_PROXY_REMOTEURL: "https://registry.access.redhat.com"
       REGISTRY_STORAGE_DELETE_ENABLED: "true"

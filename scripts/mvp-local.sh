@@ -6,7 +6,7 @@
 #   1. Start the local OCI registry (docker-compose up).
 #   2. Generate a local Cosign keypair if one doesn't exist.
 #   3. Build the distill CLI from source.
-#   4. Build and publish `specs/base-ubi9.distill.yaml` to localhost:5000.
+#   4. Build and publish `specs/base-ubi9.distill.yaml` to localhost:5555.
 #   5. Generate SBOM, Cosign-sign the image and attestations.
 #   6. Run the quality gate against the published image.
 #   7. Generate the audit evidence bundle.
@@ -35,7 +35,7 @@ step "start local registry"
 ( cd "$repo/local/registry" && docker compose up -d )
 echo "  waiting for registry health …" >&2
 for i in {1..30}; do
-  if curl -sSf http://localhost:5000/v2/ >/dev/null 2>&1; then
+  if curl -sSf http://localhost:5555/v2/ >/dev/null 2>&1; then
     echo "  registry healthy" >&2
     break
   fi
@@ -134,10 +134,10 @@ h1{font-size:1.4rem}.meta{color:#666;font-size:.9rem}</style>
   <li><a href="benchmarks/">Benchmark · base-ubi9 vs. upstream UBI9</a></li>
 </ul>
 <h2>Pull the image</h2>
-<pre><code>docker pull localhost:5000/base-ubi9:latest
+<pre><code>docker pull localhost:5555/base-ubi9:latest
 cosign verify --key local/keys/cosign.pub \\
   --allow-insecure-registry --allow-http-registry \\
-  localhost:5000/base-ubi9:latest</code></pre>
+  localhost:5555/base-ubi9:latest</code></pre>
 HTML
 
 echo "" >&2

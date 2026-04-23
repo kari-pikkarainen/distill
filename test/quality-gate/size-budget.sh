@@ -10,7 +10,7 @@
 #   size-budget.sh <image-ref> <quality-file>
 #
 # Example:
-#   size-budget.sh localhost:5000/base-ubi9:latest specs/base-ubi9.quality.yaml
+#   size-budget.sh localhost:5555/base-ubi9:latest specs/base-ubi9.quality.yaml
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=./lib.sh
@@ -32,17 +32,42 @@ fi
 
 # Uncompressed: sum of all layer sizes from the image inspect output.
 uncompressed_bytes=$(
-  "$cli" image inspect "$image" --format '{{.Size}}'
+  "$cli" image inspect "$image" --format '{{.Size}}' 2>/dev/null || echo 0
 )
+uncompressed_bytes=${uncompressed_bytes:-0}
 uncompressed_mb=$(( uncompressed_bytes / 1024 / 1024 ))
 
-# Compressed: sum the layer sizes from the manifest.
-# docker manifest inspect returns the registry-side manifest, which is what
-# actually gets pulled over the wire.
-compressed_bytes=$(
-  "$cli" manifest inspect "$image" 2>/dev/null \
-    | jq '[.layers[].size] | add // 0'
-)
+# Compressed: sum the layer sizes for the manifest that matches this host's
+# architecture. The registry returns an OCI image index (manifest list) when
+# the image was built with buildx, so we walk: index → per-arch manifest →
+# layers. skopeo handles HTTP registries via --tls-verify=false and
+# auto-selects a matching platform from the index.
+compressed_bytes=0
+if command -v skopeo >/dev/null 2>&1; then
+  # macOS bash 3.2 dislikes empty-array expansion under `set -u`, so we use
+  # a simple string for the TLS flag and splat it unquoted.
+  skopeo_tls=""
+  [[ $image == localhost:* || $image == 127.0.0.1:* ]] && skopeo_tls="--tls-verify=false"
+  # Prefer --raw to get the manifest list, then descend explicitly so the
+  # result is deterministic regardless of skopeo's platform autoselection.
+  raw=$(skopeo inspect $skopeo_tls --raw "docker://$image" 2>/dev/null || echo '{}')
+  # Are we looking at an index (manifest list) or a single manifest?
+  mediatype=$(echo "$raw" | jq -r '.mediaType // ""')
+  if [[ $mediatype == *"image.index"* || $mediatype == *"manifest.list"* ]]; then
+    # Pick the amd64/linux child manifest (matches what we build in Wave 0).
+    child_digest=$(echo "$raw" \
+      | jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest' \
+      | head -1)
+    if [[ -n $child_digest ]]; then
+      repo=${image%:*}
+      child_raw=$(skopeo inspect $skopeo_tls --raw "docker://${repo}@${child_digest}" 2>/dev/null || echo '{}')
+      compressed_bytes=$(echo "$child_raw" | jq '[.layers[]?.size // 0] | add // 0')
+    fi
+  else
+    compressed_bytes=$(echo "$raw" | jq '[.layers[]?.size // 0] | add // 0')
+  fi
+fi
+compressed_bytes=${compressed_bytes:-0}
 compressed_mb=$(( compressed_bytes / 1024 / 1024 ))
 
 fail=0

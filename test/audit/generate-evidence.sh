@@ -22,7 +22,7 @@
 #   generate-evidence.sh <image-ref> <spec-file> <output-dir>
 #
 # Example:
-#   generate-evidence.sh localhost:5000/base-ubi9:latest \
+#   generate-evidence.sh localhost:5555/base-ubi9:latest \
 #     specs/base-ubi9.distill.yaml evidence/base-ubi9/
 
 set -euo pipefail
@@ -33,6 +33,12 @@ repo_root=$(cd "$here/../.." && pwd)
 image=${1:?usage: generate-evidence.sh <image-ref> <spec-file> <output-dir>}
 spec=${2:?usage: generate-evidence.sh <image-ref> <spec-file> <output-dir>}
 out=${3:?usage: generate-evidence.sh <image-ref> <spec-file> <output-dir>}
+
+# Resolve spec to an absolute path before cd'ing into $out — otherwise
+# relative paths become invalid after the working-directory change.
+if [[ ! $spec = /* ]]; then
+  spec=$(cd "$(dirname "$spec")" && pwd)/$(basename "$spec")
+fi
 
 mkdir -p "$out"
 cd "$out"
@@ -190,11 +196,18 @@ manifest_files=$(find . -maxdepth 1 -type f ! -name 'manifest.json' ! -name 'man
 } > manifest.json
 
 # Sign the manifest (Wave 0 = local key; Wave 1 = keyless Sigstore).
+# Cosign 2.6+ bundles the signature + cert + Rekor entry into one file via
+# --bundle. For backward compatibility with VERIFY.sh's signature check, we
+# also extract the raw signature into manifest.sig.
 if [[ -f "$repo_root/local/keys/cosign.key" ]]; then
-  COSIGN_PASSWORD=${COSIGN_PASSWORD:-} cosign sign-blob --yes \
-    --key "$repo_root/local/keys/cosign.key" \
-    --output-signature manifest.sig \
-    manifest.json >/dev/null 2>&1 || true
+  if COSIGN_PASSWORD=${COSIGN_PASSWORD:-} cosign sign-blob --yes \
+       --key "$repo_root/local/keys/cosign.key" \
+       --bundle manifest.bundle \
+       manifest.json >/dev/null 2>&1; then
+    # Extract the raw base64 signature from the bundle.
+    jq -r '.base64Signature // .messageSignature.signature // empty' \
+      manifest.bundle > manifest.sig 2>/dev/null || rm -f manifest.sig
+  fi
 fi
 
 # ── VERIFY.sh ──────────────────────────────────────────────────────────────

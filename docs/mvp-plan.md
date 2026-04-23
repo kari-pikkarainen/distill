@@ -541,18 +541,18 @@ git clone git@github.com:damnhandy/distill.git && cd distill
 devbox run mvp            # or `make mvp-local`
 
 # After ~5 minutes, the local stack is up
-curl -sSf https://localhost:5000/v2/_catalog | jq .
+curl -sSf https://localhost:5555/v2/_catalog | jq .
 # → {"repositories":["base-ubi9"]}
 
 # Pull the locally-published image
-docker pull localhost:5000/base-ubi9:latest
+docker pull localhost:5555/base-ubi9:latest
 
 # Verify signature round-trips (local Sigstore or keypair)
-cosign verify localhost:5000/base-ubi9:latest \
+cosign verify localhost:5555/base-ubi9:latest \
   --key test-keys/cosign.pub
 
 # Scan and compare
-grype localhost:5000/base-ubi9:latest
+grype localhost:5555/base-ubi9:latest
 grype registry.access.redhat.com/ubi9/ubi
 
 # Local benchmark page

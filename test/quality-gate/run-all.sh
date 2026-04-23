@@ -10,7 +10,7 @@
 #   run-all.sh <image-ref> <quality-file> [--sbom <sbom.spdx.json>] [--key <cosign.pub>]
 #
 # Example:
-#   run-all.sh localhost:5000/base-ubi9:latest specs/base-ubi9.quality.yaml \
+#   run-all.sh localhost:5555/base-ubi9:latest specs/base-ubi9.quality.yaml \
 #     --sbom evidence/sbom.spdx.json --key local/keys/cosign.pub
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

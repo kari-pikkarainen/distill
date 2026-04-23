@@ -54,9 +54,9 @@ docker run --rm -it \
 ```
 
 The `--network host` is needed so the script can reach the local registry
-on `localhost:5000` from inside the devbench container. On macOS, Docker
+on `localhost:5555` from inside the devbench container. On macOS, Docker
 Desktop emulates `host` networking differently — use
-`-p 5000:5000` on the registry container and `host.docker.internal:5000`
+`-p 5555:5000` on the registry container and `host.docker.internal:5000`
 as the push target instead.
 
 Security note: `-v /var/run/docker.sock:/var/run/docker.sock` gives the
@@ -83,12 +83,12 @@ docker compose --profile cache up -d
 # Configure Docker to use the caches. Add to ~/.docker/daemon.json:
 # {
 #   "registry-mirrors": [
-#     "http://localhost:5001"
+#     "http://localhost:5556"
 #   ],
 #   "insecure-registries": [
-#     "localhost:5000",
-#     "localhost:5001",
-#     "localhost:5002"
+#     "localhost:5555",
+#     "localhost:5556",
+#     "localhost:5557"
 #   ]
 # }
 # Then restart Docker Desktop.
@@ -111,12 +111,12 @@ cd local/registry && docker compose --profile cache down -v  # also removes cach
 ## Troubleshooting
 
 **"docker push" fails with "http: server gave HTTP response to HTTPS
-client"** — your Docker daemon is refusing plain HTTP. Add `localhost:5000`
+client"** — your Docker daemon is refusing plain HTTP. Add `localhost:5555`
 to `insecure-registries` in `~/.docker/daemon.json` (Docker Desktop →
 Settings → Docker Engine), then restart Docker.
 
 **Registry health check fails** — port 5000 may be in use. Check with
-`lsof -iTCP:5000 -sTCP:LISTEN`. The conflicting process is often macOS
+`lsof -iTCP:5555 -sTCP:LISTEN`. The conflicting process is often macOS
 AirPlay Receiver (disable under System Settings → General → AirDrop &
 Handoff).
 

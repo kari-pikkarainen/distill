@@ -130,12 +130,20 @@
       "cache-up": [
         "# Wave 0.11 — start the opt-in OCI pull-through caches (Docker Hub + Red Hat).",
         "# Configure Docker daemon.json with:",
-        "#   \"registry-mirrors\": [\"http://localhost:5001\"]",
+        "#   \"registry-mirrors\": [\"http://localhost:5556\"]",
         "cd local/registry && docker compose --profile cache up -d",
         "echo ''",
         "echo 'Caches started:'",
-        "echo '  localhost:5001 → Docker Hub'",
-        "echo '  localhost:5002 → registry.access.redhat.com'"
+        "echo '  localhost:5556 → Docker Hub'",
+        "echo '  localhost:5557 → registry.access.redhat.com'"
+      ],
+      "scheduler-once": [
+        "# Wave 0.6 — run one scheduling pass (check upstream, rebuild if changed).",
+        "./scripts/rebuild-scheduler.sh once \"$@\""
+      ],
+      "scheduler-watch": [
+        "# Wave 0.6 — run the scheduler continuously (default 15-minute interval).",
+        "./scripts/rebuild-scheduler.sh watch \"$@\""
       ],
       "quality-gate": [
         "# Usage: devbox run quality-gate <image:tag> <quality-file> [--sbom <sbom>] [--key <cosign.pub>]",
@@ -145,7 +153,7 @@
       "bench": [
         "# Wave 0 benchmark: distill base-ubi9 vs. upstream UBI9 variants.",
         "./test/bench/compare.sh \\",
-        "  --distill \"${DISTILL_IMAGE:-localhost:5000/base-ubi9:latest}\" \\",
+        "  --distill \"${DISTILL_IMAGE:-localhost:5555/base-ubi9:latest}\" \\",
         "  --vs docker.io/redhat/ubi9:latest \\",
         "  --vs registry.access.redhat.com/ubi9-minimal:latest \\",
         "  --vs registry.access.redhat.com/ubi9-micro:latest \\",
