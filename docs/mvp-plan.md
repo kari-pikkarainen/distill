@@ -27,6 +27,12 @@ This plan sequences those streams. The guiding principles:
    has a public audit URL and a signed, offline-verifiable evidence bundle
    from day one. "Send your auditor this link" is a headline feature, not a
    footnote. See the "Publishable Audit Evidence" section below.
+7. **Pinned build environment and dependency resilience.** The build
+   pipeline runs in a pinned container image whose digest is part of every
+   benchmark and evidence artifact. Core dependencies — base OCI images,
+   CVE databases, distro packages, Go modules — are cached or mirrored so
+   that upstream outages don't break the daily rebuild SLA. See the
+   "Pinned Build Environment and Dependency Resilience" section below.
 
 ## Current State (verified 2026-04-22)
 
@@ -163,6 +169,91 @@ The `compliance-map.json` in every bundle implements the table from
 This is the single most valuable asset in the commercial product after the
 image itself. It compresses weeks of auditor discovery into one download.
 
+## Cross-cutting Principle: Pinned Build Environment and Dependency Resilience
+
+Two problems that are rarely separated but are actually distinct:
+
+1. **Reproducibility** — given the same spec, the same distill version, and
+   the same upstream package versions, every build must produce a
+   bit-identical image. This is impossible unless the *build environment*
+   (build tools, system libraries, shell behavior) is pinned.
+2. **Resilience** — our daily rebuild SLA depends on upstream services
+   (Docker Hub, Red Hat CDN, Debian mirrors, Grype DB, Sigstore). Any one
+   of them being rate-limited or down for hours means a missed SLA. "We
+   couldn't rebuild because Docker Hub threw 429s" is not a sellable story.
+
+### The pinned build environment (`Dockerfile.devbench`)
+
+Every quality-gate check, benchmark scan, and signing operation runs inside
+a container whose digest is recorded in every artifact it produces:
+
+```
+image-info.json / benchmark report / evidence bundle:
+  "tooling": {
+    "devbench_image": "ghcr.io/damnhandy/distill-devbench@sha256:abc123...",
+    "pinned_tools": {
+      "cosign": "v2.4.1",
+      "grype":  "v0.85.0",
+      "syft":   "v1.19.0",
+      "yq":     "v4.44.1",
+      ...
+    }
+  }
+```
+
+This makes every number falsifiable. "5 CVEs as of 2026-04-22" is
+meaningful because you can pull the exact devbench image and re-run the
+scan and reproduce the count. It also protects against the "new Grype
+release finds more CVEs than yesterday" class of benchmark drift — our
+public numbers track tooling changes as explicit events, not silent
+regressions.
+
+### Dependencies the pipeline can't afford to have break
+
+| Dependency | Upstream | Mitigation |
+|---|---|---|
+| Base OCI images (`ubi9`, `debian:bookworm`, `ubuntu:24.04`) | Docker Hub, Red Hat Registry, Quay | Pull-through cache (W0 local / W1 prod) |
+| Distro packages (RPM / DEB) | Red Hat CDN, Rocky/Alma mirrors, Debian/Ubuntu archives | Mirror (W2: Pulp for RPM, aptly for APT) |
+| Runtime upstream archives (Temurin, Node, Python) | AdoptOpenJDK, nodejs.org, python.org | Checksum-pinned cache in S3 (W2) |
+| Grype / Trivy CVE databases | GitHub releases, Anchore | S3-hosted mirror with nightly sync (W1) |
+| Sigstore (Fulcio / Rekor / TSA) | sigstore.dev | KMS-backed offline fallback (W3) |
+| Go module proxy | proxy.golang.org | GOPROXY → private cache (W2) |
+
+### What's new, vs. what's already in the plan
+
+| Concern | Addressed by |
+|---|---|
+| Customer's private RPM/APT repos | Wave 3 (Enterprise tier — Red Hat Satellite, Artifactory integration) — already planned |
+| Customer air-gapped builds | Wave 4 (Sovereign tier — offline package caches) — already planned |
+| **distill pipeline's own dependency resilience** | This section — **new across Waves 0–3** |
+
+### Wave-by-wave placement
+
+- **Wave 0 (now):** `Dockerfile.devbench` pins all build/scan/sign tools in
+  an image with a known digest. A local OCI pull-through cache is available
+  in `local/registry/docker-compose.yml` as opt-in infrastructure for
+  demonstrations and offline-ish development.
+- **Wave 1:** devbench image is published to GHCR and used by all cloud
+  build workflows. A production OCI pull-through cache sits in front of
+  every `docker pull`. Grype + Trivy DB mirror runs in S3 with nightly sync.
+- **Wave 2:** RPM mirror (Pulp / rsync from Red Hat / Rocky / Alma / CentOS),
+  APT mirror (aptly for Debian / Ubuntu), Go module cache (Athens or
+  S3-backed GOPROXY). Runtime upstream archives (Temurin, Node, Python)
+  cached with checksum pinning.
+- **Wave 3:** Sigstore TSA fallback and KMS-backed offline signing path for
+  Enterprise and Sovereign customers.
+
+### Why this is not premature optimization
+
+The daily CVE patch SLA is one of the most concrete commercial promises in
+the strategy. Every SLA miss traceable to an upstream outage is a
+credibility hit. Mirror infrastructure isn't gold-plating — it's the
+difference between shipping an SLA and shipping best-effort.
+
+Also: the Wave 2 RPM and APT mirror work is a direct prerequisite for the
+Sovereign tier's air-gapped bundle. Doing it now means Sovereign tier is
+an assembly, not a fresh implementation.
+
 ## Dependency Graph
 
 ```
@@ -250,6 +341,8 @@ Enterprise tier self-hosted customers (Phase 3). Work is not throwaway.
 | 0.7 | `devbox.json` / Makefile: single command (`make mvp-local` or `devbox run mvp`) spins up the whole local stack from a clean checkout | Eng C | 7–14 | — |
 | 0.8 | Reproducibility soak test: run the full local pipeline 3 times, verify bit-identical output each run; document any non-determinism discovered | Eng B | 10–14 | — |
 | 0.9 | **Audit evidence generator v0:** after each local build, emit `evidence/` directory with sbom + scans + provenance + quality-gate.json + compliance-map.json. Render a single-page HTML audit report at `localhost:8080/images/base-ubi9` — this is the prototype of the customer-facing audit URL | Eng C | 8–14 | Wave 1.4 |
+| 0.10 | **`Dockerfile.devbench`:** pinned build/scan/sign environment. Every tool (cosign, grype, syft, yq, jq, skopeo, oras, slsa-verifier, go, buildah) at a recorded version. All quality-gate scripts and the benchmark can run inside it. Image digest is recorded in every benchmark report and evidence bundle | Eng B | 2–6 | 0.3, 0.5, 0.9 |
+| 0.11 | **OCI pull-through cache (opt-in):** add a second service to `local/registry/docker-compose.yml` running `registry:3` in proxy mode for Docker Hub. Document as optional — demonstrates the Wave 1 architecture, speeds up repeated builds, removes Docker Hub rate-limit friction for design-partner demos | Eng A | 10–14 | — |
 
 **Exit criteria (all must hold):**
 
@@ -290,7 +383,10 @@ cloud-deployment work, not original engineering.
 | 1.4 | Landing page v1 deployed: promote Wave 0's local static site to `distill.dev` (Cloudflare Pages or S3 + CloudFront); includes the full audit page for `base-ubi9` at `distill.dev/images/base-ubi9` with SBOM viewer, scan results, provenance, benchmark, and compliance mapping | Eng C | 6–10 | 1.5 |
 | 1.5 | Benchmark harness v1 cloud: extend Wave 0's local Go runner into a scheduled GitHub Actions workflow that writes results to S3 and regenerates the public page | Eng A | 7–10 | 1.4 |
 | 1.6 | **Evidence bundle v1:** the build pipeline publishes `evidence.zip` to S3 at a stable URL (`distill.dev/images/base-ubi9/evidence.zip`), signed by Cosign. Compliance mapping covers SOC 2 CC7.1 and DISA STIG baseline only in v1 | Eng C | 8–10 | — |
-| 1.7 | Design-partner outreach begins (parallel track, started during Wave 0) | Founder | 0–10 | — |
+| 1.7 | **Publish `distill-devbench` to GHCR:** promote Wave 0's `Dockerfile.devbench` to `ghcr.io/damnhandy/distill-devbench` with digest-pinned tags. Every cloud build workflow runs inside this image; every artifact records the devbench digest it was produced with | Eng B | 3–6 | 1.1, 1.3 |
+| 1.8 | **Production OCI pull-through cache:** deploy a pull-through cache in front of the build pipeline covering Docker Hub, Red Hat Registry, Quay, and ghcr. Builds pull via the cache; upstream outages are masked for any image we've pulled before | Eng A | 6–9 | — |
+| 1.9 | **Grype + Trivy DB mirror:** S3-hosted copy with nightly sync from upstream; scanners configured to use the mirror, fallback to upstream only on startup bootstrap. Removes rebuild-pipeline dependency on Anchore's CDN and GitHub rate limits | Eng A | 8–10 | — |
+| 1.10 | Design-partner outreach begins (parallel track, started during Wave 0) | Founder | 0–10 | — |
 
 **Exit criteria (all must hold):**
 - `docker pull registry.distill.dev/base-ubi9:latest` works for anyone on the
@@ -304,6 +400,9 @@ cloud-deployment work, not original engineering.
   SOC 2 CC7.1 and DISA STIG baseline**
 - **`distill.dev/images/base-ubi9/evidence.zip` downloads a Cosign-signed
   bundle that verifies offline via `VERIFY.sh`**
+- **Every build artifact records the devbench image digest it was produced
+  with, and the production OCI pull-through cache is serving at least one
+  upstream path (Docker Hub) for build-time pulls**
 - One design partner has agreed in principle to pull images in Wave 2
 
 **Kill criteria:** If Wave 1 stretches past week 12 despite Wave 0 having
@@ -332,6 +431,10 @@ pulling images.
 | 2.10 | 3 design partners onboarded, pulling images into non-prod | Founder | 10–20 | — |
 | 2.11 | **Compliance mapping expanded:** SOC 2 (CC6, CC7, CC8), PCI DSS (6.3, 7, 10), HIPAA Security Rule (164.308, 164.312), CIS Docker Benchmark. Per-framework pages at `distill.dev/images/<stack>/compliance/<framework>`. Evidence bundles include the full mapping | Eng C | 14–20 | — |
 | 2.12 | **Digest-stable audit URLs:** every rebuild publishes `distill.dev/images/<stack>@sha256:<digest>` as a permanent URL so auditors can cite a specific point-in-time image even after rebuilds | Eng C | 16–19 | — |
+| 2.13 | **RPM mirror:** Pulp or `rsync` from Red Hat UBI, Rocky, Alma, CentOS Stream 9 (UBI is free to redistribute; commercial RHEL out of scope). Build pipeline's DNF config points at the mirror. Foundation for Sovereign air-gapped bundle | Eng A | 12–18 | — |
+| 2.14 | **APT mirror:** `aptly` for Debian Bookworm/Trixie and Ubuntu 24.04. Build pipeline's APT sources point at the mirror. Same air-gapped-bundle role as the RPM mirror | Eng A | 14–19 | — |
+| 2.15 | **Go module cache:** Athens or `GOPROXY`-compatible S3 cache so CLI and registry-service builds never depend on `proxy.golang.org` being up. Low effort (~2 days) but prevents one of the most common "pipeline is red but no code changed" failures | Eng B | 16–18 | — |
+| 2.16 | **Runtime archive cache:** checksum-pinned S3 cache of Temurin, Node.js, Python upstream archives; `runtime:` spec field resolves from the cache first | Eng B | 17–19 | — |
 
 **Exit criteria:**
 - 6 image stacks published, rebuilt daily
@@ -371,6 +474,7 @@ tier / billing.
 | 3.7 | Convert at least 1 design partner from Starter → paid Team | Founder | 22–28 | — |
 | 3.8 | **FedRAMP control mapping added** to compliance framework catalog (AC, AU, IA, SI, SA, CM controls); `distill.dev/images/<stack>/compliance/fedramp` goes live for all 15 stacks — enables Sovereign tier sales conversations | Eng C | 22–26 | — |
 | 3.9 | **Auditor-ready evidence bundle v2:** add `VERIFY.sh` script that re-runs signature verification, SBOM hash check, and provenance verification fully offline; add `manifest.json` signing; package all 15 stacks' bundles at stable URLs | Eng B | 24–27 | — |
+| 3.10 | **Sigstore TSA fallback + KMS-backed signing:** pipeline continues signing during Sigstore public infra outages via a KMS-backed fallback key and a private TSA. Essential for the daily-rebuild SLA and a prerequisite for Sovereign-tier air-gapped signing | Eng B | 23–27 | — |
 
 **Exit criteria:**
 - 15 image stacks published and rebuilt daily
@@ -395,10 +499,15 @@ Phase 3 (Enterprise).
   field (Wave 0)
 - `devbox.json` — extend with Wave 0.7 `mvp` script to orchestrate the local
   stack
+- `local/registry/docker-compose.yml` — add optional pull-through cache
+  service (Wave 0.11)
 
 ### New (create)
 
+- `Dockerfile.devbench` — pinned build/scan/sign environment (Wave 0.10)
 - `infra/registry/` — Terraform or CDK for Zot deployment
+- `infra/pull-through-cache/` — Wave 1.8 production cache (Docker Hub, Red Hat, Quay)
+- `infra/dep-mirrors/` — Wave 1.9 CVE DB mirror; Wave 2.13–2.16 RPM/APT/Go/runtime mirrors
 - `infra/build-scheduler/` — upstream watcher + scheduler (Go service)
 - `specs/` — canonical image specs for the 15 stacks (separate from
   `examples/` which stays as single-distro reference specs)
@@ -407,6 +516,7 @@ Phase 3 (Enterprise).
 - `site/` — landing page, catalog, SBOM viewer, benchmark page
 - `.github/workflows/benchmark.yml` — nightly benchmark harness
 - `.github/workflows/compliance-nightly.yml` — CIS + STIG nightly (Wave 3)
+- `.github/workflows/devbench-publish.yml` — build + push `distill-devbench` to GHCR (Wave 1.7)
 
 ## Reuse / leverage existing code
 
