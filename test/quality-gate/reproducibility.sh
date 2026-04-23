@@ -35,7 +35,21 @@ image_ref=$(
 
 platform=${DISTILL_PLATFORM:-linux/amd64}
 
+# Deterministic timestamp for the build — if caller hasn't set
+# SOURCE_DATE_EPOCH, derive it from the spec file so the same spec
+# always produces the same epoch, a different spec produces a
+# different one.
+if [[ -z ${SOURCE_DATE_EPOCH:-} ]]; then
+  # Spec content hash → epoch between 2000-01-01 and 2038-01-01.
+  spec_hash=$(sha256sum "$spec" | cut -c1-8)
+  # Decimal value of first 8 hex chars, mod (2038-2000 in seconds).
+  spec_int=$((0x$spec_hash))
+  range=$((2147472000 - 946684800))
+  export SOURCE_DATE_EPOCH=$((946684800 + (spec_int % range)))
+fi
+
 qg::info "reproducibility soak: $runs build(s) of $spec on $platform"
+qg::info "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
 
 digests=()
 for (( i=1; i<=runs; i++ )); do

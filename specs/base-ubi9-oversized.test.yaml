@@ -1,0 +1,15 @@
+image: base-ubi9
+
+# Deliberately-too-tight budget for fail-closed testing. The actual
+# base-ubi9 image is 19MB — setting the budget to 5MB guarantees a
+# violation, which the quality gate must detect and fail on.
+size-budget:
+  compressed-mb: 5
+  uncompressed-mb: 10
+
+cve-thresholds:
+  critical: 0
+  high: 0
+
+compliance-baseline:
+  - soc2-cc7.1

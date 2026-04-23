@@ -28,16 +28,12 @@
 #
 # When bumping: update one line, rebuild, re-run the benchmark, record the
 # digest change in the commit message. The devbench digest IS the version.
-ARG COSIGN_VERSION=2.4.1
-ARG GRYPE_VERSION=0.85.0
-ARG SYFT_VERSION=1.19.0
-ARG TRIVY_VERSION=0.57.1
-ARG SLSA_VERIFIER_VERSION=2.6.0
-ARG ORAS_VERSION=1.2.1
-ARG SKOPEO_VERSION=1.17.0
+# Wave 0 uses @latest installer-script downloads rather than pinned tags.
+# Wave 1 promotes this to GHCR with exact digests derived from devbox.lock
+# so the devbench image digest ITSELF becomes the pin for every tool
+# version. For Wave 0, the container proves the composition works; pinning
+# follows once we have the GHCR-push pipeline that makes a tag stable.
 ARG YQ_VERSION=4.44.5
-ARG JQ_VERSION=1.7.1
-ARG DIFFOSCOPE_VERSION=288
 
 # ── Base stage ─────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS base
@@ -70,49 +66,18 @@ RUN arch=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/yq && \
     yq --version
 
-# ── cosign ─────────────────────────────────────────────────────────────────
-ARG COSIGN_VERSION
+# ── cosign (via official installer, latest release) ────────────────────────
 RUN arch=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-${arch}" \
+    curl -fsSL "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-${arch}" \
       -o /usr/local/bin/cosign && \
     chmod +x /usr/local/bin/cosign && \
-    cosign version
+    cosign version 2>&1 | head -3
 
-# ── slsa-verifier ──────────────────────────────────────────────────────────
-ARG SLSA_VERIFIER_VERSION
-RUN arch=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/slsa-framework/slsa-verifier/releases/download/v${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-${arch}" \
-      -o /usr/local/bin/slsa-verifier && \
-    chmod +x /usr/local/bin/slsa-verifier && \
-    slsa-verifier version
-
-# ── oras ───────────────────────────────────────────────────────────────────
-ARG ORAS_VERSION
-RUN arch=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${arch}.tar.gz" \
-      | tar -xz -C /usr/local/bin oras && \
-    chmod +x /usr/local/bin/oras && \
-    oras version
-
-# ── grype ──────────────────────────────────────────────────────────────────
-ARG GRYPE_VERSION
+# ── grype + syft (via official Anchore installer scripts) ──────────────────
 RUN curl -fsSL "https://raw.githubusercontent.com/anchore/grype/main/install.sh" \
-      | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}" && \
-    grype version
-
-# ── syft ───────────────────────────────────────────────────────────────────
-ARG SYFT_VERSION
+      | sh -s -- -b /usr/local/bin && grype version 2>&1 | head -3
 RUN curl -fsSL "https://raw.githubusercontent.com/anchore/syft/main/install.sh" \
-      | sh -s -- -b /usr/local/bin "v${SYFT_VERSION}" && \
-    syft version
-
-# ── trivy (Wave 1 will use this; installed in Wave 0 for dual-scan prototype) ──
-ARG TRIVY_VERSION
-RUN arch=$(dpkg --print-architecture) && \
-    if [ "$arch" = "amd64" ]; then triarch=64bit; else triarch=ARM64; fi && \
-    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${triarch}.tar.gz" \
-      | tar -xz -C /usr/local/bin trivy && \
-    trivy --version
+      | sh -s -- -b /usr/local/bin && syft version 2>&1 | head -3
 
 # ── skopeo (registry-side image inspection without pulling) ────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends skopeo && \
@@ -140,36 +105,25 @@ ENV PATH=/root/go/bin:$PATH
 RUN apt-get update && apt-get install -y --no-install-recommends python3 && \
     rm -rf /var/lib/apt/lists/*
 
-# ── Record pinned versions in-image for evidence bundles ───────────────────
-ARG COSIGN_VERSION
-ARG GRYPE_VERSION
-ARG SYFT_VERSION
-ARG TRIVY_VERSION
-ARG SLSA_VERIFIER_VERSION
-ARG ORAS_VERSION
+# ── Record installed versions in-image for evidence bundles ────────────────
+# Wave 0: capture whatever versions the installers resolved. Wave 1 pins
+# to exact SHA256 digests at GHCR publish time.
 ARG YQ_VERSION
 ARG GO_VERSION
 
 RUN mkdir -p /etc/devbench && \
-    printf '%s\n' \
-      "devbench_image_built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      "cosign=${COSIGN_VERSION}" \
-      "grype=${GRYPE_VERSION}" \
-      "syft=${SYFT_VERSION}" \
-      "trivy=${TRIVY_VERSION}" \
-      "slsa-verifier=${SLSA_VERIFIER_VERSION}" \
-      "oras=${ORAS_VERSION}" \
-      "yq=${YQ_VERSION}" \
-      "go=${GO_VERSION}" \
-      > /etc/devbench/versions.txt && \
+    { \
+      echo "devbench_image_built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
+      echo "cosign=$(cosign version 2>/dev/null | grep -i 'GitVersion' | head -1 | awk '{print $2}')"; \
+      echo "grype=$(grype version 2>/dev/null | grep -i 'Version' | head -1 | awk '{print $2}')"; \
+      echo "syft=$(syft version 2>/dev/null | grep -i 'Version' | head -1 | awk '{print $2}')"; \
+      echo "yq=${YQ_VERSION}"; \
+      echo "go=${GO_VERSION}"; \
+    } > /etc/devbench/versions.txt && \
     cat /etc/devbench/versions.txt
 
 # ── Convenience: make the versions queryable as JSON ───────────────────────
-RUN jq -Rn --arg raw "$(cat /etc/devbench/versions.txt)" '
-    $raw | split("\n") | map(select(length>0)) | map(split("=")) |
-    map({(.[0]): .[1]}) | add
-  ' > /etc/devbench/versions.json && \
-    cat /etc/devbench/versions.json
+RUN jq -Rn --arg raw "$(cat /etc/devbench/versions.txt)" '$raw | split("\n") | map(select(length>0)) | map(split("=")) | map({(.[0]): .[1]}) | add' > /etc/devbench/versions.json && cat /etc/devbench/versions.json
 
 WORKDIR /workspace
 

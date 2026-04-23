@@ -37,6 +37,9 @@ func (b *APTBuilder) Build(ctx context.Context, s *spec.ImageSpec, platform stri
 	}
 
 	args := []string{"build", "--platform", platform, "-f", dockerfilePath}
+	// Reproducibility flags — see internal/builder/dnf.go for the full
+	// rationale. Disables buildx's non-deterministic auto-attestations.
+	args = append(args, "--provenance=false", "--sbom=false")
 	if s.Destination != nil && s.Destination.Image != "" {
 		args = append(args, "-t", s.Destination.Ref())
 	}

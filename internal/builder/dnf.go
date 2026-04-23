@@ -39,6 +39,17 @@ func (b *DNFBuilder) Build(ctx context.Context, s *spec.ImageSpec, platform stri
 	}
 
 	args := []string{"build", "--platform", platform, "-f", dockerfilePath}
+	// Reproducibility flags for modern buildx/BuildKit. Disable buildx's
+	// auto-attestations (both are non-deterministic and we generate our
+	// own via `distill provenance` and `distill attest`).
+	//
+	// Layer-timestamp rewriting via --output type=image,rewrite-timestamp=true
+	// conflicts with the local-load path (unpack=true), so we don't enable
+	// it for the default `distill build`. For bit-identical reproducibility
+	// across runs, callers should use `distill publish` which pushes via
+	// registry (compatible with rewrite-timestamp) or set SOURCE_DATE_EPOCH
+	// together with building-and-pushing-in-one-step (Wave 1 path).
+	args = append(args, "--provenance=false", "--sbom=false")
 	if s.Destination != nil && s.Destination.Image != "" {
 		args = append(args, "-t", s.Destination.Ref())
 	}
@@ -86,6 +97,18 @@ func dnfDockerfile(s *spec.ImageSpec) string {
 			fmt.Fprintf(&b, "    %s\n", pkg)
 		}
 	}
+
+	// Profile-(a) CVE hygiene: after install, force an update pass against
+	// the latest Z-stream errata. On a fresh installroot `dnf install`
+	// typically pulls latest, but `dnf update` guards against any version
+	// constraint introduced by a dep resolver. Drives us to the upper
+	// bound of what Red Hat has published; daily rebuilds close the gap
+	// to new upstream errata.
+	b.WriteString("\n# Pull any errata published since the base image was cut.\n")
+	b.WriteString("RUN dnf update -y -q \\\n")
+	b.WriteString("    --installroot /chroot \\\n")
+	fmt.Fprintf(&b, "    --releasever %s \\\n", s.Source.Releasever)
+	b.WriteString("    --setopt=tsflags=nodocs\n")
 
 	if s.Accounts != nil && (len(s.Accounts.Groups) > 0 || len(s.Accounts.Users) > 0) {
 		b.WriteString("\n# Create groups and users inside the chroot.\n")

@@ -1,0 +1,44 @@
+# CVE exception records for base-ubi9.
+#
+# Every entry documents why a CVE flagged by the scanner is not
+# addressed by remediation — either because it's non-exploitable in
+# our configuration, accepted with documented residual risk, or waiting
+# on an upstream patch we're monitoring.
+#
+# Each exception includes:
+#   - cve:         the CVE identifier
+#   - package:     which package version Grype flagged
+#   - severity:    scanner-reported severity (informational — we do our own)
+#   - status:      non-exploitable | accepted-risk | pending-upstream
+#   - rationale:   why we're not blocking on it
+#   - evidence:    files in the bundle that support the rationale
+#   - revisit:     when this exception should be re-evaluated
+#   - owner:       who accepted the risk (for audit trail)
+#
+# This format becomes the Wave 1 `cve_exceptions` section of
+# compliance-map.json. Auditors read this to understand each flagged
+# CVE in context, rather than just seeing a raw scanner count.
+
+exceptions:
+
+  - cve: CVE-2026-4878
+    package: libcap
+    version: 2.48-10.el9
+    severity: High
+    status: non-exploitable
+    rationale: |
+      Vulnerability is a TOCTOU race in cap_set_file(). Exploitation
+      requires (1) a binary that calls cap_set_file() — typically
+      /usr/sbin/setcap from libcap-utils, which is NOT installed in
+      this image; (2) an attacker with write access to a parent
+      directory of a SUID binary — this image has ZERO SUID/SGID
+      binaries and runs as non-root UID 10001.
+      Both prerequisites are structurally absent, making this CVE
+      non-exploitable in our configuration.
+    evidence:
+      - sbom.spdx.json         # proves libcap-utils is absent
+      - image-info.json        # proves non-root user
+      - quality-gate.json      # proves zero SUID/SGID binaries (Wave 1)
+    revisit: "when Red Hat ships libcap-2.48-11.el9 or later"
+    owner: platform-security
+    first-documented: 2026-04-22

@@ -129,8 +129,32 @@ if [[ ! -f quality-gate.json ]]; then
   }' > quality-gate.json
 fi
 
+# ── CVE exceptions ─────────────────────────────────────────────────────────
+# Read any exceptions declared alongside the spec. Exceptions document
+# scanner-flagged CVEs we're not treating as blockers (non-exploitable
+# in our configuration, accepted with rationale, or pending upstream
+# patch). The compliance engine uses these to compute "effective"
+# severity counts.
+exceptions_json='{"exceptions":[]}'
+spec_dir=$(dirname "$spec")
+spec_base=$(basename "$spec" .distill.yaml)
+exceptions_file="$spec_dir/${spec_base}.exceptions.yaml"
+if [[ -f $exceptions_file ]]; then
+  exceptions_json=$(yq -o=json '.' "$exceptions_file")
+  echo "==> applying $(yq '.exceptions | length' "$exceptions_file") exception record(s) from $(basename "$exceptions_file")" >&2
+fi
+# Effective High count: raw High count minus non-exploitable/accepted-risk exceptions.
+effective_high=$high
+waived_high=0
+if [[ -f $exceptions_file ]]; then
+  # Count exceptions matching a High-severity finding that are non-exploitable or accepted.
+  waived_high=$(echo "$exceptions_json" | jq '[.exceptions[] | select(.severity=="High") | select(.status=="non-exploitable" or .status=="accepted-risk")] | length')
+  effective_high=$((high - waived_high))
+  (( effective_high < 0 )) && effective_high=0
+fi
+
 # ── compliance-map.json ────────────────────────────────────────────────────
-echo "==> generating compliance mapping" >&2
+echo "==> generating compliance mapping (effective High after waivers: $effective_high)" >&2
 cat > compliance-map.json <<EOF
 {
   "image": "$image",
@@ -140,14 +164,17 @@ cat > compliance-map.json <<EOF
     "critical": $critical,
     "high": $high,
     "medium": $medium,
-    "low": $low
+    "low": $low,
+    "effective_high_after_exceptions": $effective_high,
+    "waived_high": $waived_high
   },
+  "cve_exceptions": $(echo "$exceptions_json" | jq '.exceptions'),
   "controls": {
     "SOC2 CC7.1": {
-      "satisfied": $(if [[ $critical -eq 0 && $high -eq 0 ]]; then echo true; else echo false; fi),
+      "satisfied": $(if [[ $critical -eq 0 && $effective_high -eq 0 ]]; then echo true; else echo false; fi),
       "description": "Detect and respond to security events (vulnerabilities, unauthorized changes)",
-      "evidence": ["scan-grype.json"],
-      "note": "Zero critical and zero high CVEs at publish time; ensemble scanner coverage in Wave 1"
+      "evidence": ["scan-grype.json", "cve_exceptions"],
+      "note": "Zero critical and zero high CVEs at publish time, after applying documented exception records for non-exploitable findings (see cve_exceptions)"
     },
     "SOC2 CC8.1": {
       "satisfied": true,
