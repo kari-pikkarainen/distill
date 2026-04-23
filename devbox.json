@@ -157,13 +157,18 @@
         "./test/quality-gate/run-all.sh \"$@\""
       ],
       "bench": [
-        "# Wave 0 benchmark: distill base-ubi9 vs. upstream UBI9 variants.",
+        "# Wave 0 benchmark (single profile): distill base-ubi9 vs. upstream UBI9 variants.",
         "./test/bench/compare.sh \\",
         "  --distill \"${DISTILL_IMAGE:-localhost:5555/base-ubi9:latest}\" \\",
         "  --vs docker.io/redhat/ubi9:latest \\",
         "  --vs registry.access.redhat.com/ubi9-minimal:latest \\",
         "  --vs registry.access.redhat.com/ubi9-micro:latest \\",
         "  --out test/bench/report"
+      ],
+      "bench-profiles": [
+        "# Wave 0 multi-profile benchmark: every distill stack vs. its peers,",
+        "# including Chainguard. Definitions live in test/bench/profiles.yaml.",
+        "./test/bench/run-profiles.sh"
       ],
       "evidence": [
         "# Usage: devbox run evidence <image:tag> <spec-file> <output-dir>",

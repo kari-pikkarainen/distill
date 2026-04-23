@@ -1,0 +1,56 @@
+# Benchmark profiles — each profile defines one "use case" and the images
+# that compete in it. The benchmark runner measures all of them together
+# so we can produce an apples-to-apples comparison per workload type.
+#
+# Add new profiles by appending. Each profile renders as its own section
+# on the benchmark landing page.
+
+profiles:
+
+  # ── base OS ───────────────────────────────────────────────────────────────
+  # The foundation. "What's the minimal bootable-ish UBI9 root filesystem
+  # look like?" distill wins vs stock UBI9 by a wide margin; ubi9-micro is
+  # a strong minimalist competitor; Chainguard's wolfi-base is a different
+  # distro so comparisons are indicative rather than strict equivalence.
+  - id: base
+    title: "Base OS (minimal Linux userland)"
+    use-case: |
+      Best fit for: static binaries (Go, Rust), thin scratch-style bases
+      that layer an app on top, compliance-mandated RHEL-family rootfs.
+      When package customization matters, distill; when smallest possible
+      wins and RHEL family is required, ubi9-micro; when RHEL is not
+      required, Chainguard wolfi-base has the strongest CVE story.
+    distill: localhost:5555/base-ubi9:latest
+    competitors:
+      - label: "UBI9 stock"
+        image: docker.io/redhat/ubi9:latest
+      - label: "UBI9 minimal"
+        image: registry.access.redhat.com/ubi9-minimal:latest
+      - label: "UBI9 micro"
+        image: registry.access.redhat.com/ubi9-micro:latest
+      - label: "Chainguard wolfi-base"
+        image: cgr.dev/chainguard/wolfi-base:latest
+
+  # ── Java 21 JRE runtime ───────────────────────────────────────────────────
+  # The "run a packaged jar" workload. This is the most common enterprise
+  # use case for a hardened image — most Fortune 500 Java services run on
+  # JRE images like this. Temurin is the community JRE; Red Hat ships
+  # OpenJDK as part of UBI; Chainguard ships their own wolfi-packaged JRE.
+  - id: java21
+    title: "Java 21 JRE (production runtime)"
+    use-case: |
+      Best fit for: Spring Boot services, Kotlin apps, most enterprise
+      Java workloads. distill gives RHEL-packaged OpenJDK with a minimal
+      OS userland (matches enterprise support contracts). Chainguard JRE
+      is smallest and lowest-CVE but ships wolfi (non-RHEL). The stock
+      eclipse-temurin image is Debian-based — a different compliance
+      story. RHEL's own openjdk image is RHEL-family but ships with a
+      lot of extra OS packages.
+    distill: localhost:5555/java21-ubi9:latest
+    competitors:
+      - label: "eclipse-temurin 21-jre"
+        image: docker.io/library/eclipse-temurin:21-jre
+      - label: "Red Hat OpenJDK 21"
+        image: registry.access.redhat.com/ubi9/openjdk-21-runtime
+      - label: "Chainguard JRE"
+        image: cgr.dev/chainguard/jre:latest

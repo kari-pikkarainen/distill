@@ -1,0 +1,60 @@
+name: java21-ubi9
+description: Minimal UBI9 runtime with Java 21 (OpenJDK headless JRE)
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: docker.io/redhat/ubi9
+  releasever: "9"
+
+destination:
+  image: localhost:5555/java21-ubi9
+  releasever: latest
+
+# For Wave 0 the JRE comes from UBI9 appstream. Wave 2 will switch to
+# upstream Temurin via the (not-yet-implemented) runtime: spec field for
+# support-contract fidelity.
+contents:
+  packages:
+    - java-21-openjdk-headless
+    # The JRE package pulls glibc, zlib, libstdc++, etc. as dependencies;
+    # we still declare the ones an app typically needs directly.
+    - ca-certificates
+    - tzdata
+    - glibc-langpack-en
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+  JAVA_HOME: /usr/lib/jvm/jre-21-openjdk
+  PATH: /usr/lib/jvm/jre-21-openjdk/bin:/usr/local/bin:/usr/bin:/bin
+
+work-dir: /app
+
+cmd:
+  - /usr/lib/jvm/jre-21-openjdk/bin/java
+  - -version
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true

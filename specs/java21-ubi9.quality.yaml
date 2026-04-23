@@ -1,0 +1,21 @@
+image: java21-ubi9
+
+# Temurin 21 JRE + minimal OS userland. Not competing with ubi9-micro on
+# pure size, but ~60% smaller than the typical eclipse-temurin:21-jre image.
+size-budget:
+  compressed-mb: 180
+  uncompressed-mb: 400
+
+cve-thresholds:
+  critical: 0
+  high: 0
+
+compliance-baseline:
+  - soc2-cc7.1
+  - soc2-cc8.1
+  - stig-baseline
+  - cis-docker-5.29
+
+functional-smoke:
+  command: ["java", "-version"]
+  expected-output: "Temurin"
