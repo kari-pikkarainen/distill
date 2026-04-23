@@ -272,7 +272,10 @@ HTML
 echo "==> HTML summary rendered to $html" >&2
 
 if (( serve )); then
-  echo "==> serving $out on http://localhost:8080" >&2
+  # Port 8080 is commonly bound by Docker Desktop on macOS, which silently
+  # returns 404 — use 8088 as a safer default.
+  serve_port=${BENCH_PORT:-8088}
+  echo "==> serving $out on http://localhost:$serve_port" >&2
   cd "$out"
-  python3 -m http.server 8080
+  python3 -m http.server "$serve_port"
 fi

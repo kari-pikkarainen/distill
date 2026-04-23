@@ -137,6 +137,12 @@
         "echo '  localhost:5556 → Docker Hub'",
         "echo '  localhost:5557 → registry.access.redhat.com'"
       ],
+      "serve": [
+        "# Wave 0 — serve the local landing page (audit + benchmark) on :8088.",
+        "# Port 8080 is commonly taken on macOS by Docker Desktop; 8088 is reliably free.",
+        "PORT=${PORT:-8088}",
+        "cd site/local && echo \"serving http://localhost:${PORT}\" && python3 -m http.server \"${PORT}\""
+      ],
       "scheduler-once": [
         "# Wave 0.6 — run one scheduling pass (check upstream, rebuild if changed).",
         "./scripts/rebuild-scheduler.sh once \"$@\""

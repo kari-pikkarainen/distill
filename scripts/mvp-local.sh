@@ -140,6 +140,20 @@ cosign verify --key local/keys/cosign.pub \\
   localhost:5555/base-ubi9:latest</code></pre>
 HTML
 
+# Pick a serve port that isn't already bound. Port 8080 is commonly taken on
+# macOS by Docker Desktop's hub proxy, which silently returns 404 — use 8088
+# as a safer default and fall back further if that's also busy.
+pick_port() {
+  for p in 8088 8089 8090 9090; do
+    if ! lsof -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "$p"
+      return
+    fi
+  done
+  echo 8088
+}
+serve_port=$(pick_port)
+
 echo "" >&2
 echo "╔══════════════════════════════════════════════════════════════════════" >&2
 echo "║  Wave 0 pipeline complete." >&2
@@ -151,8 +165,9 @@ echo "║  Benchmark: $repo/test/bench/report/index.html" >&2
 echo "║  Site:      $site_root/index.html" >&2
 echo "║" >&2
 echo "║  To serve the landing page:" >&2
-echo "║      cd $site_root && python3 -m http.server 8080" >&2
+echo "║      devbox run serve         (or: cd $site_root && python3 -m http.server $serve_port)" >&2
+echo "║      open http://localhost:$serve_port" >&2
 echo "║" >&2
 echo "║  To tear down:" >&2
-echo "║      cd $repo/local/registry && docker compose down -v" >&2
+echo "║      devbox run mvp-local-down" >&2
 echo "╚══════════════════════════════════════════════════════════════════════" >&2
