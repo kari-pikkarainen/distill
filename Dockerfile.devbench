@@ -1,0 +1,193 @@
+# distill — pinned build/scan/sign environment (Wave 0.10).
+#
+# Every tool used to build, scan, sign, and benchmark distill images is
+# installed at a recorded version. The resulting image digest is referenced
+# in every benchmark report and every evidence bundle, making every
+# published number traceable to the exact tooling that produced it.
+#
+# Usage (from the repo root):
+#
+#   # Build the image
+#   docker build -f Dockerfile.devbench -t distill-devbench:local .
+#
+#   # Run the full Wave 0 pipeline inside it
+#   docker run --rm -it \
+#     -v "$PWD":/workspace \
+#     -v /var/run/docker.sock:/var/run/docker.sock \
+#     -w /workspace \
+#     distill-devbench:local \
+#     devbox run mvp-local
+#
+# Security note: bind-mounting /var/run/docker.sock gives this container
+# effective root on the host Docker daemon. That is acceptable for local
+# dev and CI runners, but is NOT the posture for a production build node.
+# Wave 1 runs the devbench inside ephemeral GitHub Actions runners where
+# the socket boundary is the runner lifetime, not the laptop lifetime.
+
+# ── Tool versions (pinned) ──────────────────────────────────────────────────
+#
+# When bumping: update one line, rebuild, re-run the benchmark, record the
+# digest change in the commit message. The devbench digest IS the version.
+ARG COSIGN_VERSION=2.4.1
+ARG GRYPE_VERSION=0.85.0
+ARG SYFT_VERSION=1.19.0
+ARG TRIVY_VERSION=0.57.1
+ARG SLSA_VERIFIER_VERSION=2.6.0
+ARG ORAS_VERSION=1.2.1
+ARG SKOPEO_VERSION=1.17.0
+ARG YQ_VERSION=4.44.5
+ARG JQ_VERSION=1.7.1
+ARG DIFFOSCOPE_VERSION=288
+
+# ── Base stage ─────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS base
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        bash \
+        xz-utils \
+        docker.io \
+        buildah \
+        make && \
+    rm -rf /var/lib/apt/lists/*
+
+# ── jq (small, from apt) ───────────────────────────────────────────────────
+# jq 1.7.1 is what ships in Bookworm; pin via apt.
+RUN apt-get update && apt-get install -y --no-install-recommends jq && \
+    rm -rf /var/lib/apt/lists/*
+
+# ── yq ─────────────────────────────────────────────────────────────────────
+ARG YQ_VERSION
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${arch}" \
+      -o /usr/local/bin/yq && \
+    chmod +x /usr/local/bin/yq && \
+    yq --version
+
+# ── cosign ─────────────────────────────────────────────────────────────────
+ARG COSIGN_VERSION
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-${arch}" \
+      -o /usr/local/bin/cosign && \
+    chmod +x /usr/local/bin/cosign && \
+    cosign version
+
+# ── slsa-verifier ──────────────────────────────────────────────────────────
+ARG SLSA_VERIFIER_VERSION
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/slsa-framework/slsa-verifier/releases/download/v${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-${arch}" \
+      -o /usr/local/bin/slsa-verifier && \
+    chmod +x /usr/local/bin/slsa-verifier && \
+    slsa-verifier version
+
+# ── oras ───────────────────────────────────────────────────────────────────
+ARG ORAS_VERSION
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${arch}.tar.gz" \
+      | tar -xz -C /usr/local/bin oras && \
+    chmod +x /usr/local/bin/oras && \
+    oras version
+
+# ── grype ──────────────────────────────────────────────────────────────────
+ARG GRYPE_VERSION
+RUN curl -fsSL "https://raw.githubusercontent.com/anchore/grype/main/install.sh" \
+      | sh -s -- -b /usr/local/bin "v${GRYPE_VERSION}" && \
+    grype version
+
+# ── syft ───────────────────────────────────────────────────────────────────
+ARG SYFT_VERSION
+RUN curl -fsSL "https://raw.githubusercontent.com/anchore/syft/main/install.sh" \
+      | sh -s -- -b /usr/local/bin "v${SYFT_VERSION}" && \
+    syft version
+
+# ── trivy (Wave 1 will use this; installed in Wave 0 for dual-scan prototype) ──
+ARG TRIVY_VERSION
+RUN arch=$(dpkg --print-architecture) && \
+    if [ "$arch" = "amd64" ]; then triarch=64bit; else triarch=ARM64; fi && \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${triarch}.tar.gz" \
+      | tar -xz -C /usr/local/bin trivy && \
+    trivy --version
+
+# ── skopeo (registry-side image inspection without pulling) ────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends skopeo && \
+    rm -rf /var/lib/apt/lists/* && \
+    skopeo --version
+
+# ── diffoscope (reproducibility diagnosis) ─────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        diffoscope-minimal && \
+    rm -rf /var/lib/apt/lists/* && \
+    diffoscope --version
+
+# ── Go (for building the distill CLI from source) ──────────────────────────
+ARG GO_VERSION=1.23.4
+RUN arch=$(dpkg --print-architecture) && \
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" \
+      | tar -xz -C /usr/local && \
+    ln -s /usr/local/go/bin/go /usr/local/bin/go && \
+    go version
+
+ENV GOPATH=/root/go
+ENV PATH=/root/go/bin:$PATH
+
+# ── Python (for the Wave 0 benchmark HTTP server) ──────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# ── Record pinned versions in-image for evidence bundles ───────────────────
+ARG COSIGN_VERSION
+ARG GRYPE_VERSION
+ARG SYFT_VERSION
+ARG TRIVY_VERSION
+ARG SLSA_VERIFIER_VERSION
+ARG ORAS_VERSION
+ARG YQ_VERSION
+ARG GO_VERSION
+
+RUN mkdir -p /etc/devbench && \
+    printf '%s\n' \
+      "devbench_image_built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "cosign=${COSIGN_VERSION}" \
+      "grype=${GRYPE_VERSION}" \
+      "syft=${SYFT_VERSION}" \
+      "trivy=${TRIVY_VERSION}" \
+      "slsa-verifier=${SLSA_VERIFIER_VERSION}" \
+      "oras=${ORAS_VERSION}" \
+      "yq=${YQ_VERSION}" \
+      "go=${GO_VERSION}" \
+      > /etc/devbench/versions.txt && \
+    cat /etc/devbench/versions.txt
+
+# ── Convenience: make the versions queryable as JSON ───────────────────────
+RUN jq -Rn --arg raw "$(cat /etc/devbench/versions.txt)" '
+    $raw | split("\n") | map(select(length>0)) | map(split("=")) |
+    map({(.[0]): .[1]}) | add
+  ' > /etc/devbench/versions.json && \
+    cat /etc/devbench/versions.json
+
+WORKDIR /workspace
+
+# The distill CLI is not baked in — mount the repo and build it fresh.
+# This keeps the image lean and avoids stale CLI binaries.
+# To bake in the CLI for CI, use the `with-cli` target below.
+
+LABEL org.opencontainers.image.source="https://github.com/damnhandy/distill"
+LABEL org.opencontainers.image.title="distill-devbench"
+LABEL org.opencontainers.image.description="Pinned build/scan/sign environment for distill image builds"
+
+# Default entry: interactive bash. Orchestration scripts override this.
+CMD ["/bin/bash"]
+
+# ── Optional: bake the CLI in for Wave 1 CI ────────────────────────────────
+FROM base AS with-cli
+
+COPY . /src
+RUN cd /src && \
+    go build -ldflags "-s -w -X github.com/damnhandy/distill/cmd.Version=devbench" -o /usr/local/bin/distill . && \
+    distill version

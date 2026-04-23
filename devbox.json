@@ -98,13 +98,44 @@
         "  --source-uri \"github.com/damnhandy/distill\""
       ],
       "mvp-local": [
-        "# Wave 0 — run the full local MVP pipeline end-to-end.",
+        "# Wave 0 — run the full local MVP pipeline end-to-end on the host.",
         "# See scripts/mvp-local.sh for the step-by-step breakdown.",
         "./scripts/mvp-local.sh"
       ],
       "mvp-local-down": [
         "# Wave 0 — tear down the local registry and its data volume.",
+        "cd local/registry && docker compose --profile cache down -v || true",
         "cd local/registry && docker compose down -v"
+      ],
+      "devbench-build": [
+        "# Wave 0.10 — build the pinned build/scan/sign environment image.",
+        "# Image digest will be recorded in benchmark and evidence artifacts.",
+        "docker build -f Dockerfile.devbench -t distill-devbench:local .",
+        "echo ''",
+        "echo 'Pinned tool versions in this devbench image:'",
+        "docker run --rm distill-devbench:local cat /etc/devbench/versions.txt"
+      ],
+      "mvp-container": [
+        "# Wave 0 — run mvp-local inside the pinned devbench container.",
+        "# Produces reproducible benchmark numbers traceable to the devbench digest.",
+        "docker build -f Dockerfile.devbench -t distill-devbench:local .",
+        "docker run --rm -it \\",
+        "  -v \"$PWD\":/workspace \\",
+        "  -v /var/run/docker.sock:/var/run/docker.sock \\",
+        "  -w /workspace \\",
+        "  --network host \\",
+        "  distill-devbench:local \\",
+        "  ./scripts/mvp-local.sh"
+      ],
+      "cache-up": [
+        "# Wave 0.11 — start the opt-in OCI pull-through caches (Docker Hub + Red Hat).",
+        "# Configure Docker daemon.json with:",
+        "#   \"registry-mirrors\": [\"http://localhost:5001\"]",
+        "cd local/registry && docker compose --profile cache up -d",
+        "echo ''",
+        "echo 'Caches started:'",
+        "echo '  localhost:5001 → Docker Hub'",
+        "echo '  localhost:5002 → registry.access.redhat.com'"
       ],
       "quality-gate": [
         "# Usage: devbox run quality-gate <image:tag> <quality-file> [--sbom <sbom>] [--key <cosign.pub>]",

@@ -32,6 +32,15 @@ declare -a competitors=()
 out="$here/report"
 serve=0
 
+# Capture tooling versions. When running inside distill-devbench, tool
+# versions are pinned and recorded with the benchmark. Outside, note that
+# numbers are tool-version-dependent and may not be reproducible.
+if [[ -f /etc/devbench/versions.json ]]; then
+  tooling_json=$(cat /etc/devbench/versions.json)
+else
+  tooling_json='{"source": "native", "note": "Tool versions not pinned; run via distill-devbench for reproducible numbers"}'
+fi
+
 while (( $# )); do
   case $1 in
     --distill) distill_image=$2; shift 2 ;;
@@ -133,6 +142,9 @@ report="$out/report.json"
 {
   echo '{'
   echo '  "scanned_at": "'"$scanned_at"'",'
+  echo '  "tooling": '
+  echo "$tooling_json"
+  echo '  ,'
   echo '  "distill": '
   echo "$distill_json"
   echo '  ,'

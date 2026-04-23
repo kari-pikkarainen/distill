@@ -48,6 +48,16 @@ spec_digest=$(sha256sum "$spec" | awk '{print $1}')
 distill_version=$(distill version 2>/dev/null | head -1 || echo "unknown")
 scanned_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Pinned tooling versions. When this script is running inside the
+# distill-devbench container, /etc/devbench/versions.json has the exact
+# tool versions used for every measurement. Outside the container we
+# record "native" to signal the numbers are not digest-pinned.
+if [[ -f /etc/devbench/versions.json ]]; then
+  tooling=$(cat /etc/devbench/versions.json)
+else
+  tooling='{"source": "native", "note": "Tool versions not pinned; run inside distill-devbench for reproducible numbers"}'
+fi
+
 jq -n \
   --arg image "$image" \
   --arg image_digest "$image_digest" \
@@ -55,13 +65,15 @@ jq -n \
   --arg spec_digest "sha256:$spec_digest" \
   --arg distill_version "$distill_version" \
   --arg scanned_at "$scanned_at" \
+  --argjson tooling "$tooling" \
   '{
     image: $image,
     image_digest: $image_digest,
     spec: $spec,
     spec_digest: $spec_digest,
     distill_version: $distill_version,
-    scanned_at: $scanned_at
+    scanned_at: $scanned_at,
+    tooling: $tooling
   }' > image-info.json
 
 # ── sbom.spdx.json (SPDX) ──────────────────────────────────────────────────
