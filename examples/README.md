@@ -2,7 +2,15 @@
 
 Each subdirectory contains a `.distill.yaml` spec and a `test.yaml`
 [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
-configuration.
+configuration. These are reference specs — useful for learning the schema
+and exercising every supported distribution.
+
+> Looking for the canonical product specs (used by the local end-to-end
+> pipeline and intended to evolve into the published image catalog)? See
+> [`../specs/`](../specs/). The two directories serve different intents:
+> `examples/` covers every supported distro for testing; `specs/` is the
+> commercial-product image set with sidecar quality budgets and CVE
+> exception records.
 
 | Example | Distribution | Target size | Notes |
 |---|---|---|---|

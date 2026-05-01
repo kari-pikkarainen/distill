@@ -18,11 +18,30 @@ explicitly with `base.packageManager`:
 ## Repository layout
 
 ```text
-cmd/                    # cobra CLI commands (build, scan, attest)
+cmd/                    # cobra CLI commands (build, scan, attest, publish, ...)
 internal/
   spec/                 # ImageSpec YAML types, Parse(), validation
   builder/              # Builder interface, DNF/APT backends, OCI assembly
+  mcpserver/            # MCP stdio server (`distill mcp`)
 examples/               # ready-to-use ImageSpec YAML files + structure tests
+specs/                  # canonical product image specs targeting the local
+                        # registry. Each spec has a sidecar `*.quality.yaml`
+                        # (size budget + CVE thresholds) and an optional
+                        # `*.exceptions.yaml` (documented CVE waivers).
+test/
+  quality-gate/         # 8-check gate as composable shell scripts
+  bench/                # single + multi-profile benchmark runners + profiles.yaml
+  audit/                # evidence-bundle generator + auditor-facing HTML renderer
+local/
+  registry/             # docker-compose for local OCI registry + opt-in caches
+  keys/                 # local Cosign keypair generator (gitignored private key)
+scripts/
+  mvp-local.sh          # Wave 0 end-to-end orchestrator
+  rebuild-scheduler.sh  # local simulation of the production rebuild scheduler
+  install.sh            # CLI installer for end users
+docs/                   # strategy, mvp-plan, testing-strategy, hardening,
+                        # use-case matrix
+Dockerfile.devbench     # pinned build/scan/sign environment for CI reproducibility
 ```
 
 ## Build and run
@@ -33,6 +52,18 @@ go mod tidy             # resolve dependencies
 go build -o distill .   # compile the binary
 ./distill --help
 ```
+
+For the full commercial-pipeline end-to-end (registry + sign + SBOM +
+quality gate + audit bundle + benchmark) on the developer laptop:
+
+```bash
+devbox run mvp-local
+```
+
+This is the primary integration-test surface: any change that breaks the
+end-to-end pipeline shows up here before it reaches CI. See
+[`docs/mvp-plan.md`](./docs/mvp-plan.md) §"Wave 0" for what this exercises
+and the exit criteria.
 
 ## Testing
 
