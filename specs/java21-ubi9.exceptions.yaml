@@ -1,0 +1,187 @@
+# CVE exception records for java21-ubi9.
+#
+# This image is a generic Java 21 JRE base — it will be consumed by many
+# different applications, and the exploitability of several flagged CVEs
+# depends on what those applications do. Where exploitability is decisive
+# (image config-specific), we waive the CVE. Where exploitability depends
+# on the consuming application's behavior, we document the dependency
+# but do NOT waive — the consumer must do their own assessment.
+#
+# Status values:
+#   non-exploitable    Won't apply regardless of consuming app (config-specific). Waived.
+#   accepted-risk      Known issue, residual risk explicitly accepted. Waived.
+#   consumer-context   Exploitability depends on consuming app's behavior. NOT waived.
+#                      Consumer must perform their own application-context assessment.
+#   pending-upstream   Awaiting an upstream patch; tracked. NOT waived.
+#
+# Only `non-exploitable` and `accepted-risk` reduce the effective_high
+# count for compliance evaluation.
+
+exceptions:
+
+  # ── Image config-specific (waived) ───────────────────────────────────────
+
+  - cve: CVE-2026-4878
+    package: libcap
+    version: 2.48-10.el9
+    severity: High
+    status: non-exploitable
+    rationale: |
+      TOCTOU race in cap_set_file(). Same exploit path as in base-ubi9:
+      requires libcap-utils (NOT installed) + a SUID binary (this image
+      has zero) + write access (blocked by USER 10001 + recommended
+      readOnlyRootFilesystem). All three prerequisites structurally
+      absent; non-exploitable in this image's configuration.
+    evidence:
+      - sbom.spdx.json
+      - image-info.json
+    revisit: "when Red Hat ships libcap-2.48-11.el9 or later"
+    owner: platform-security
+    first-documented: 2026-04-22
+
+  # ── Workload-dependent (NOT waived; consumer assessment required) ──────────
+
+  - cve: CVE-2025-66293
+    package: java-21-openjdk-headless
+    severity: High
+    status: consumer-context
+    rationale: |
+      Out-of-bounds read in libpng's simplified API (libpng is bundled
+      inside OpenJDK). Exploitable only if the Java application processes
+      attacker-controlled PNG data via java.awt.image. Pure-backend
+      services that don't decode images (typical Spring Boot REST APIs,
+      Kafka consumers, batch jobs) are not exposed.
+    consumer-must-assess: "Does the Java application call java.awt.image methods on untrusted PNG input?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships an OpenJDK 21 errata with bundled libpng 1.6.55+"
+
+  - cve: CVE-2026-25646
+    package: java-21-openjdk-headless
+    severity: High
+    status: consumer-context
+    rationale: |
+      Heap-based buffer overflow in libpng png_set_quantize() (bundled in
+      OpenJDK). Same consumer-context as CVE-2025-66293 — affects only
+      apps that process attacker-controlled PNG data.
+    consumer-must-assess: "Does the Java application process untrusted PNG input?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships an OpenJDK 21 errata with bundled libpng 1.6.55+"
+
+  - cve: CVE-2026-26740
+    package: java-21-openjdk-headless
+    severity: High
+    status: consumer-context
+    rationale: |
+      Buffer overflow in giflib EGifGCBToExtension (bundled in OpenJDK).
+      Exploitable only if the Java application decodes attacker-controlled
+      GIF data.
+    consumer-must-assess: "Does the Java application decode untrusted GIF input?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships an OpenJDK 21 errata with patched giflib"
+
+  - cve: CVE-2026-33845
+    package: gnutls
+    version: 3.8.3-10.el9_7
+    severity: High
+    status: consumer-context
+    rationale: |
+      DTLS handshake parsing flaw — out-of-bounds read during fragment
+      reassembly. Affects only applications that use DTLS for transport
+      (real-time media, some VPN protocols). Standard HTTPS/TLS over TCP
+      is unaffected. Most Java enterprise services do not use DTLS.
+    consumer-must-assess: "Does the Java application use DTLS?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships gnutls-3.8.3-11.el9 or later"
+
+  - cve: CVE-2026-40356
+    package: krb5-libs
+    version: 1.21.1-9.el9_7
+    severity: High
+    status: consumer-context
+    rationale: |
+      Integer underflow in gss_accept_sec_context() — exploitable only by
+      applications that accept Kerberos/GSSAPI authentication from
+      untrusted clients. Most Java services authenticate via OAuth2/OIDC
+      JWT and do not call gss_accept_sec_context.
+    consumer-must-assess: "Does the Java application accept Kerberos/GSSAPI auth from untrusted parties?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships krb5-1.21.1-10.el9 or later"
+
+  # ── Pending upstream patch (NOT waived; tracked) ──────────────────────────
+
+  - cve: CVE-2026-4786
+    package: python3
+    version: 3.9.25-3.el9_7.2
+    severity: High
+    status: pending-upstream
+    rationale: |
+      Python webbrowser.open() URL handling allows mitigation bypass
+      (CVE-2026-4519 follow-up). Python 3.9 is in this image as a
+      transitive dependency of java-21-openjdk-headless (used by Java's
+      security policy management tooling). Java applications do not
+      invoke webbrowser.open() in any normal flow.
+    evidence:
+      - sbom.spdx.json
+    revisit: "when Red Hat ships python3-3.9.25-4.el9 or later (Wave 2 may evaluate moving to a no-Python OpenJDK packaging)"
+
+  - cve: CVE-2026-6100
+    package: python3
+    version: 3.9.25-3.el9_7.2
+    severity: High
+    status: pending-upstream
+    rationale: |
+      Use-after-free in Python's lzma/bz2/gzip decompression modules.
+      Same Python 3.9 transitive dependency as CVE-2026-4786. Java
+      applications that don't shell out to Python are not exposed.
+    evidence:
+      - sbom.spdx.json
+    revisit: "when Red Hat ships python3-3.9.25-4.el9 or later"
+
+  # ── No upstream description yet (NOT waived; tracked) ─────────────────────
+  # Three OpenJDK CVEs without published advisories at scan time. We can't
+  # assess exploitability without knowing the vulnerability — track and
+  # wait for upstream description.
+
+  - cve: CVE-2026-22016
+    package: java-21-openjdk-headless
+    severity: High
+    status: pending-upstream
+    rationale: |
+      No vulnerability description available at scan time. Cannot assess
+      exploitability without details. Tracking; will reassess once
+      Red Hat / NVD publish the advisory.
+    evidence:
+      - scan-grype.json
+    revisit: "when CVE-2026-22016 advisory is published"
+
+  - cve: CVE-2026-22020
+    package: java-21-openjdk-headless
+    severity: High
+    status: pending-upstream
+    rationale: |
+      No vulnerability description available at scan time. Same handling
+      as CVE-2026-22016.
+    evidence:
+      - scan-grype.json
+    revisit: "when CVE-2026-22020 advisory is published"
+
+  - cve: CVE-2026-34282
+    package: java-21-openjdk-headless
+    severity: High
+    status: pending-upstream
+    rationale: |
+      No vulnerability description available at scan time. Same handling
+      as CVE-2026-22016.
+    evidence:
+      - scan-grype.json
+    revisit: "when CVE-2026-34282 advisory is published"

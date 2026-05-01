@@ -1,0 +1,62 @@
+name: python312-ubi9
+description: Minimal UBI9 runtime with Python 3.12 (interpreter only, no pip)
+
+variant: runtime
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+source:
+  image: docker.io/redhat/ubi9
+  releasever: "9"
+
+destination:
+  image: localhost:5555/python312-ubi9
+  releasever: latest
+
+contents:
+  packages:
+    # Python 3.12 from UBI9 appstream — Red Hat-supported binary.
+    - python3.12
+    # Common runtime requirements:
+    - ca-certificates
+    - tzdata
+    - glibc-langpack-en
+    # Note: pip is intentionally NOT installed. This image runs pre-built
+    # applications. For images that need to install packages at runtime,
+    # use a build-time pip + a lock file in your Dockerfile, then
+    # `FROM registry.distill.dev/python312-ubi9` to layer the result.
+
+accounts:
+  run-as: appuser
+  users:
+    - name: appuser
+      uid: 10001
+      gid: 10001
+      shell: /sbin/nologin
+  groups:
+    - name: appuser
+      gid: 10001
+
+environment:
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+  PYTHONUNBUFFERED: "1"          # log lines aren't buffered — important for k8s logging
+  PYTHONDONTWRITEBYTECODE: "1"   # no .pyc files in read-only-fs deployments
+  PATH: /usr/local/bin:/usr/bin:/bin
+
+work-dir: /app
+
+cmd:
+  - /usr/bin/python3.12
+  - --version
+
+pipeline:
+  scan:
+    enabled: true
+    fail-on: critical
+  sbom:
+    enabled: true
+  provenance:
+    enabled: true

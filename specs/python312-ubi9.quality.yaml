@@ -1,0 +1,22 @@
+image: python312-ubi9
+
+# Python 3.12 + minimal OS userland. Comparable to python:3.12-slim
+# (Debian-based) which runs ~50 MB, but on UBI9 — slightly larger
+# because RHEL OpenSSL + glibc are heavier than Debian's.
+size-budget:
+  compressed-mb: 80
+  uncompressed-mb: 200
+
+cve-thresholds:
+  critical: 0
+  high: 0
+
+compliance-baseline:
+  - soc2-cc7.1
+  - soc2-cc8.1
+  - stig-baseline
+  - cis-docker-5.29
+
+functional-smoke:
+  command: ["/usr/bin/python3.12", "-c", "import sys, ssl, json; print('ok', sys.version_info[:3], ssl.OPENSSL_VERSION)"]
+  expected-output: "ok"

@@ -1,0 +1,24 @@
+# CVE exception records for python312-ubi9.
+#
+# See specs/java21-ubi9.exceptions.yaml for the full schema documentation
+# and status-value semantics.
+
+exceptions:
+
+  - cve: CVE-2026-40356
+    package: krb5-libs
+    version: 1.21.1-9.el9_7
+    severity: High
+    status: consumer-context
+    rationale: |
+      Integer underflow in gss_accept_sec_context() — exploitable only
+      by applications that accept Kerberos/GSSAPI authentication from
+      untrusted clients. Most Python services authenticate via OAuth2
+      bearer tokens or session cookies. Applications using
+      python-gssapi or kerberos libraries to accept Kerberos tickets
+      from untrusted parties may be exposed.
+    consumer-must-assess: "Does the Python application use python-gssapi or similar to accept Kerberos/GSSAPI from untrusted parties?"
+    evidence:
+      - sbom.spdx.json
+      - scan-grype.json
+    revisit: "when Red Hat ships krb5-1.21.1-10.el9 or later"

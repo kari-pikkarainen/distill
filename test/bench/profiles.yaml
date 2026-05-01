@@ -31,6 +31,31 @@ profiles:
       - label: "Chainguard wolfi-base"
         image: cgr.dev/chainguard/wolfi-base:latest
 
+  # ── Python 3.12 runtime ───────────────────────────────────────────────────
+  # The "run a Python application" workload. Most enterprise Python services
+  # are Flask/FastAPI/Django apps deployed on either python:slim (Debian) or
+  # the language-specific image their distro provides. Chainguard ships a
+  # wolfi-based variant for the no-RHEL-mandate case.
+  - id: python312
+    title: "Python 3.12 (production runtime)"
+    use-case: |
+      Best fit for: Flask / FastAPI / Django services, ML inference
+      workloads, data-pipeline workers. distill ships RHEL-packaged
+      python3.12 with a minimal OS userland (matches enterprise support
+      contracts; OpenSSL 3.x + glibc identical to your other RHEL apps).
+      Chainguard's python image has the lowest CVE count (wolfi). The
+      stock python:3.12-slim is Debian-based — different compliance
+      story. Red Hat's own ubi9/python-312 image is RHEL-family but
+      ships with extra OS packages and pip preinstalled.
+    distill: localhost:5555/python312-ubi9:latest
+    competitors:
+      - label: "python 3.12-slim (Debian)"
+        image: docker.io/library/python:3.12-slim
+      - label: "Red Hat UBI9 python-312"
+        image: registry.access.redhat.com/ubi9/python-312
+      - label: "Chainguard Python"
+        image: cgr.dev/chainguard/python:latest
+
   # ── Java 21 JRE runtime ───────────────────────────────────────────────────
   # The "run a packaged jar" workload. This is the most common enterprise
   # use case for a hardened image — most Fortune 500 Java services run on
